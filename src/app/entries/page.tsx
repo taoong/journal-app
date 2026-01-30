@@ -54,7 +54,7 @@ export default async function EntriesPage() {
           {entries?.map((entry) => {
             const tags = entry.entry_tags
               ?.map((et: { tags?: { name: string } | null }) => et.tags?.name)
-              .filter((name): name is string => typeof name === 'string') || []
+              .filter((name: unknown): name is string => typeof name === 'string') || []
             
             return (
               <Link
