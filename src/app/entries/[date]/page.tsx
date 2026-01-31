@@ -1,5 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
+import { format } from 'date-fns'
 import EntryForm from '@/components/EntryForm'
 
 export default async function EntryPage({ params }: { params: Promise<{ date: string }> }) {
@@ -38,11 +39,15 @@ export default async function EntryPage({ params }: { params: Promise<{ date: st
     .filter((id: unknown): id is string => typeof id === 'string') || []
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          {entry ? 'Edit Entry' : 'New Entry'}
-        </h1>
+    <div className="min-h-screen bg-zinc-50">
+      <div className="max-w-2xl mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-zinc-900">
+            {entry ? 'Edit Entry' : 'New Entry'}
+          </h1>
+          <p className="text-zinc-500 mt-1">{format(new Date(date), 'EEEE, MMMM d, yyyy')}</p>
+        </div>
+        
         <EntryForm 
           initialDate={date}
           entry={entry || undefined}

@@ -4,8 +4,13 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
+import { Label } from '@/components/ui/label'
+import { Calendar, Plus, Loader2, Check } from 'lucide-react'
 
-interface Tag {
+interface TagType {
   id: string
   name: string
 }
@@ -34,7 +39,7 @@ interface EntryFormProps {
   initialDate: string
   entry?: Entry
   selectedTagIds?: string[]
-  availableTags: Tag[]
+  availableTags: TagType[]
   userId: string
 }
 
@@ -57,8 +62,8 @@ export default function EntryForm({
   const [morning, setMorning] = useState(entry?.morning || '')
   const [afternoon, setAfternoon] = useState(entry?.afternoon || '')
   const [night, setNight] = useState(entry?.night || '')
-  const [pScore, setPScore] = useState(entry?.p_score?.toString() || '')
-  const [lScore, setLScore] = useState(entry?.l_score?.toString() || '')
+  const [pScore, setPScore] = useState(entry?.p_score ?? 5)
+  const [lScore, setLScore] = useState(entry?.l_score ?? 5)
   const [weight, setWeight] = useState(entry?.weight?.toString() || '')
   const [tags, setTags] = useState<Set<string>>(new Set(selectedTagIds))
   const [newTag, setNewTag] = useState('')
@@ -66,6 +71,7 @@ export default function EntryForm({
   const [loading, setLoading] = useState(false)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [fetchingCalendar, setFetchingCalendar] = useState(false)
+  // const [calendarConnected, setCalendarConnected] = useState(true)
 
   const handleTagToggle = (tagId: string) => {
     const newTags = new Set(tags)
@@ -104,7 +110,6 @@ export default function EntryForm({
     setError('')
 
     try {
-      // Upsert entry
       const entryData = {
         user_id: userId,
         date,
@@ -113,8 +118,8 @@ export default function EntryForm({
         morning: morning || null,
         afternoon: afternoon || null,
         night: night || null,
-        p_score: pScore ? parseInt(pScore) : null,
-        l_score: lScore ? parseInt(lScore) : null,
+        p_score: pScore,
+        l_score: lScore,
         weight: weight ? parseFloat(weight) : null,
       }
 
@@ -126,13 +131,11 @@ export default function EntryForm({
 
       if (entryError) throw entryError
 
-      // Delete existing entry_tags
       await supabase
         .from('entry_tags')
         .delete()
         .eq('entry_id', entryResult.id)
 
-      // Insert new entry_tags
       if (tags.size > 0) {
         const entryTags = Array.from(tags).map(tagId => ({
           entry_id: entryResult.id,
@@ -157,13 +160,17 @@ export default function EntryForm({
 
   const fetchCalendarEvents = async () => {
     setFetchingCalendar(true)
+    setError('')
+    // setCalendarConnected(true)
+    
     try {
       const res = await fetch(`/api/calendar?date=${date}`)
       const data = await res.json()
 
       if (data.error) {
         if (data.needsReauth) {
-          setError('Calendar not connected. Please re-login to grant calendar access.')
+          // setCalendarConnected(false)
+          setError('Calendar not connected. Please sign out and re-login to grant calendar access.')
         } else {
           setError('Error fetching calendar: ' + data.error)
         }
@@ -193,216 +200,223 @@ export default function EntryForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-md">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Date
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="date">Date</Label>
+        <Input
+          id="date"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* Calendar Integration */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-medium text-blue-900">📅 Google Calendar</h3>
+      <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-zinc-600" />
+            <span className="font-medium text-zinc-900">Google Calendar</span>
+          </div>
           <button
             type="button"
             onClick={fetchCalendarEvents}
             disabled={fetchingCalendar}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 text-white text-sm rounded-md hover:bg-zinc-800 disabled:opacity-50 transition-colors"
           >
-            {fetchingCalendar ? 'Loading...' : 'Fetch Events'}
+            {fetchingCalendar ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              'Fetch Events'
+            )}
           </button>
         </div>
         
         {calendarEvents.length > 0 && (
-          <div className="mb-3">
-            <p className="text-sm text-blue-700 mb-2">
-              {calendarEvents.length} events found
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-600">
+              {calendarEvents.length} event{calendarEvents.length !== 1 ? 's' : ''} found
             </p>
             <button
               type="button"
               onClick={stubFromCalendar}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-md hover:bg-emerald-500 transition-colors"
             >
-              Stub into Morning Section
+              <Plus className="w-4 h-4" />
+              Stub into Morning
             </button>
           </div>
         )}
 
-        {calendarEvents.length === 0 && !fetchingCalendar && (
-          <p className="text-sm text-blue-600">
+        {calendarEvents.length === 0 && !fetchingCalendar && !error && (
+          <p className="text-sm text-zinc-500">
             Click &quot;Fetch Events&quot; to pull today&apos;s calendar
           </p>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Highlights (High)
-          </label>
-          <textarea
+        <div className="space-y-2">
+          <Label htmlFor="highlights-high">Highlights</Label>
+          <Textarea
+            id="highlights-high"
+            placeholder="What went well today?"
             value={highlightsHigh}
             onChange={(e) => setHighlightsHigh(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={4}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Highlights (Low)
-          </label>
-          <textarea
+        <div className="space-y-2">
+          <Label htmlFor="highlights-low">Lowlights</Label>
+          <Textarea
+            id="highlights-low"
+            placeholder="What could have been better?"
             value={highlightsLow}
             onChange={(e) => setHighlightsLow(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={4}
           />
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Morning
-        </label>
-        <textarea
+      <div className="space-y-2">
+        <Label htmlFor="morning">Morning</Label>
+        <Textarea
+          id="morning"
+          placeholder="How was your morning?"
           value={morning}
           onChange={(e) => setMorning(e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={5}
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Afternoon
-        </label>
-        <textarea
+      <div className="space-y-2">
+        <Label htmlFor="afternoon">Afternoon</Label>
+        <Textarea
+          id="afternoon"
+          placeholder="How was your afternoon?"
           value={afternoon}
           onChange={(e) => setAfternoon(e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={5}
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Night
-        </label>
-        <textarea
+      <div className="space-y-2">
+        <Label htmlFor="night">Night</Label>
+        <Textarea
+          id="night"
+          placeholder="How was your evening?"
           value={night}
           onChange={(e) => setNight(e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={5}
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            P Score (1-10)
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="10"
-            value={pScore}
-            onChange={(e) => setPScore(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label>P Score</Label>
+            <span className="text-sm font-medium text-zinc-600">{pScore}/10</span>
+          </div>
+          <Slider
+            value={[pScore]}
+            onValueChange={([value]) => setPScore(value)}
+            min={1}
+            max={10}
+            step={1}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            L Score (1-10)
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="10"
-            value={lScore}
-            onChange={(e) => setLScore(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label>L Score</Label>
+            <span className="text-sm font-medium text-zinc-600">{lScore}/10</span>
+          </div>
+          <Slider
+            value={[lScore]}
+            onValueChange={([value]) => setLScore(value)}
+            min={1}
+            max={10}
+            step={1}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Weight
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="weight">Weight</Label>
+          <Input
+            id="weight"
             type="number"
             step="0.1"
+            placeholder="lbs"
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Tags
-        </label>
-        <div className="flex flex-wrap gap-2 mb-3">
+      <div className="space-y-3">
+        <Label>Tags</Label>
+        <div className="flex flex-wrap gap-2">
           {availableTags.map((tag) => (
             <button
               key={tag.id}
               type="button"
               onClick={() => handleTagToggle(tag.id)}
-              className={`px-3 py-1 rounded-md text-sm ${
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-colors ${
                 tags.has(tag.id)
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-zinc-900 text-white'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
               }`}
             >
               {tag.name}
+              {tags.has(tag.id) && <Check className="w-3 h-3" />}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
-          <input
-            type="text"
+          <Input
+            placeholder="Add a tag..."
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
-            placeholder="New tag name"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
           />
           <button
             type="button"
             onClick={handleAddTag}
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+            className="px-4 py-2 bg-zinc-900 text-white rounded-md hover:bg-zinc-800 transition-colors"
           >
-            Add Tag
+            <Plus className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-3 pt-4">
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors font-medium"
         >
-          {loading ? 'Saving...' : entry ? 'Update Entry' : 'Create Entry'}
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </>
+          ) : entry ? (
+            'Update Entry'
+          ) : (
+            'Create Entry'
+          )}
         </button>
         <Link
           href="/entries"
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-center"
+          className="px-4 py-2.5 bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 transition-colors font-medium"
         >
           Cancel
         </Link>

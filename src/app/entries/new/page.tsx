@@ -3,7 +3,12 @@ import { redirect } from 'next/navigation'
 import { format } from 'date-fns'
 import EntryForm from '@/components/EntryForm'
 
-export default async function NewEntryPage() {
+export default async function NewEntryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>
+}) {
+  const { date: queryDate } = await searchParams
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -17,12 +22,16 @@ export default async function NewEntryPage() {
     .eq('user_id', user.id)
     .order('name')
 
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = queryDate || format(new Date(), 'yyyy-MM-dd')
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">New Entry</h1>
+    <div className="min-h-screen bg-zinc-50">
+      <div className="max-w-2xl mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-zinc-900">New Entry</h1>
+          <p className="text-zinc-500 mt-1">{format(new Date(today), 'EEEE, MMMM d, yyyy')}</p>
+        </div>
+        
         <EntryForm 
           initialDate={today}
           availableTags={tags || []}
