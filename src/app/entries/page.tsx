@@ -3,49 +3,41 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'da
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
-import { Plus, Calendar as CalendarIcon, List, Search, Download, Flame, TrendingUp, BarChart3 } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, List, Search, Download, Flame, TrendingUp, BarChart3, Settings } from 'lucide-react'
 
 export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string }> }) {
   const { view, q, tag, from, to } = await searchParams
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   
-  // Build query
-  let query = supabase
+  // Optimized: Single query instead of multiple
+  const { data: entriesData } = await supabase
     .from('entries')
     .select(`
-      *,
-      entry_tags (
-        tags (
-          name
-        )
-      )
+      id, date, p_score, l_score, weight,
+      entry_tags (tags (name))
     `)
     .eq('user_id', user?.id)
+    .order('date', { ascending: false })
 
-  if (q) {
-    query = query.or(`highlights_high.ilike.%${q}%,highlights_low.ilike.%${q}%,morning.ilike.%${q}%,afternoon.ilike.%${q}%,night.ilike.%${q}%`)
-  }
-  if (tag) {
-    query = query.eq('entry_tags.tags.name', tag)
-  }
-  if (from) query = query.gte('date', from)
-  if (to) query = query.lte('date', to)
+  // Derive everything from single query
+  const entries = entriesData?.map(e => ({
+    ...e,
+    entry_tags: e.entry_tags?.map((et: any) => ({ tags: et.tags }))
+  })) || []
 
-  const { data: entries } = await query.order('date', { ascending: false })
-
-  // Get analytics
-  const { data: allEntries } = await supabase
-    .from('entries')
-    .select('date, p_score, l_score, weight')
-    .eq('user_id', user?.id)
+  const allEntries = entriesData?.map(e => ({ date: e.date, p_score: e.p_score, l_score: e.l_score, weight: e.weight })) || []
+  const entriesByDate = entriesData?.reduce((acc, e) => {
+    acc[e.date] = true
+    return acc
+  }, {} as Record<string, boolean>) || {}
 
   // Calculate streak
   let currentStreak = 0
   let bestStreak = 0
-  const sortedDates = allEntries?.map(e => e.date).sort((a, b) => 
+  const sortedDates = allEntries.map(e => e.date).sort((a, b) => 
     new Date(a!).getTime() - new Date(b!).getTime()
-  ) || []
+  )
 
   if (sortedDates.length > 0) {
     const today = new Date().toISOString().split('T')[0]
@@ -70,43 +62,61 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     }
   }
 
-  // Get calendar data
-  const { data: calendarEntries } = await supabase
-    .from('entries')
-    .select('date')
-    .eq('user_id', user?.id)
+  // Filtered entries for display
+  let displayEntries = entries
+  if (q || tag || from || to) {
+    displayEntries = entries.filter(e => {
+      if (q) {
+        const searchStr = `${e.highlights_high || ''} ${e.highlights_low || ''} ${e.morning || ''} ${e.afternoon || ''} ${e.night || ''}`.toLowerCase()
+        if (!searchStr.includes(q.toLowerCase())) return false
+      }
+      if (tag) {
+        const tags = e.entry_tags?.map((et: any) => et.tags?.name).filter(Boolean) || []
+        if (!tags.includes(tag)) return false
+      }
+      if (from && e.date < from) return false
+      if (to && e.date > to) return false
+      return true
+    })
+  }
 
   const today = new Date()
   const monthStart = startOfMonth(today)
   const monthEnd = endOfMonth(today)
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
-  
-  const entriesByDate = calendarEntries?.reduce((acc, e) => {
-    acc[e.date] = true
-    return acc
-  }, {} as Record<string, boolean>) || {}
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="max-w-5xl mx-auto py-8 px-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-semibold text-zinc-900">Journal</h1>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/entries/new"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors text-sm font-medium"
-            >
-              <Plus className="w-4 h-4" />
-              New Entry
-            </Link>
-            <LogoutButton />
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-zinc-50/95 backdrop-blur-sm border-b border-zinc-200">
+        <div className="max-w-5xl mx-auto py-4 px-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-zinc-900">Journal</h1>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/settings"
+                className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
+                aria-label="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </Link>
+              <Link
+                href="/entries/new"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Entry</span>
+              </Link>
+              <LogoutButton />
+            </div>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-5xl mx-auto py-6 px-4">
         {/* Analytics Widget */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <Link href="/entries?view=calendar" className="bg-white rounded-xl border border-zinc-200 p-4 hover:border-zinc-300 transition-colors">
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-100 rounded-lg">
                 <Flame className="w-5 h-5 text-orange-600" />
@@ -116,7 +126,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 <p className="text-sm text-zinc-500">Day Streak</p>
               </div>
             </div>
-          </Link>
+          </div>
           <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
@@ -128,17 +138,17 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               </div>
             </div>
           </div>
-          <Link href="/entries?view=calendar" className="bg-white rounded-xl border border-zinc-200 p-4 hover:border-zinc-300 transition-colors">
+          <div className="bg-white rounded-xl border border-zinc-200 p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <BarChart3 className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-zinc-900">{allEntries?.length || 0}</p>
+                <p className="text-2xl font-semibold text-zinc-900">{allEntries.length}</p>
                 <p className="text-sm text-zinc-500">Total Entries</p>
               </div>
             </div>
-          </Link>
+          </div>
           <a href="/api/entries/export" className="bg-white rounded-xl border border-zinc-200 p-4 hover:border-zinc-300 transition-colors group">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
@@ -160,30 +170,28 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               <input
                 name="q"
                 defaultValue={q}
-                placeholder="Search entries..."
-                className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                placeholder="Search..."
+                className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <input
                 name="tag"
                 defaultValue={tag}
-                placeholder="Filter by tag..."
-                className="w-32 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                placeholder="Tag..."
+                className="w-24 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
               <input
                 name="from"
                 defaultValue={from}
                 type="date"
-                placeholder="From"
-                className="w-36 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                className="w-32 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
               <input
                 name="to"
                 defaultValue={to}
                 type="date"
-                placeholder="To"
-                className="w-36 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                className="w-32 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
               <button
                 type="submit"
@@ -226,7 +234,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             </Link>
           </div>
           <p className="text-sm text-zinc-500">
-            {entries?.length || 0} entries
+            {displayEntries.length} entries
           </p>
         </div>
 
@@ -270,9 +278,9 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
         ) : (
           /* List View */
           <div className="space-y-4">
-            {entries?.map((entry) => {
+            {displayEntries.map((entry) => {
               const tags = entry.entry_tags
-                ?.map((et: { tags?: { name: string } | null }) => et.tags?.name)
+                ?.map((et: any) => et.tags?.name)
                 .filter((name: unknown): name is string => typeof name === 'string') || []
               
               return (
@@ -280,7 +288,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               )
             })}
 
-            {entries?.length === 0 && (
+            {displayEntries.length === 0 && (
               <div className="text-center py-16">
                 <p className="text-zinc-500 mb-4">No entries found</p>
                 <Link

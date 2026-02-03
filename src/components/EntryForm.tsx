@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
-import { Calendar, Plus, Loader2, Check } from 'lucide-react'
+import { Calendar, Plus, Loader2, Check, AlertCircle } from 'lucide-react'
 
 interface TagType {
   id: string
@@ -71,7 +71,7 @@ export default function EntryForm({
   const [loading, setLoading] = useState(false)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [fetchingCalendar, setFetchingCalendar] = useState(false)
-  // const [calendarConnected, setCalendarConnected] = useState(true)
+  const [calendarNeedsAuth, setCalendarNeedsAuth] = useState(false)
 
   const handleTagToggle = (tagId: string) => {
     const newTags = new Set(tags)
@@ -161,7 +161,7 @@ export default function EntryForm({
   const fetchCalendarEvents = async () => {
     setFetchingCalendar(true)
     setError('')
-    // setCalendarConnected(true)
+    setCalendarNeedsAuth(false)
     
     try {
       const res = await fetch(`/api/calendar?date=${date}`)
@@ -169,8 +169,8 @@ export default function EntryForm({
 
       if (data.error) {
         if (data.needsReauth) {
-          // setCalendarConnected(false)
-          setError('Calendar not connected. Please sign out and re-login to grant calendar access.')
+          setCalendarNeedsAuth(true)
+          setError('Calendar access expired. Click "Re-authenticate" below to restore access.')
         } else {
           setError('Error fetching calendar: ' + data.error)
         }
@@ -183,6 +183,12 @@ export default function EntryForm({
     } finally {
       setFetchingCalendar(false)
     }
+  }
+
+  const reauthenticateCalendar = async () => {
+    // Sign out and redirect to login with hint to re-grant calendar access
+    await supabase.auth.signOut()
+    router.push('/login?reauth=calendar')
   }
 
   const stubFromCalendar = () => {
@@ -202,8 +208,9 @@ export default function EntryForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <div>{error}</div>
         </div>
       )}
 
@@ -225,18 +232,30 @@ export default function EntryForm({
             <Calendar className="w-4 h-4 text-zinc-600" />
             <span className="font-medium text-zinc-900">Google Calendar</span>
           </div>
-          <button
-            type="button"
-            onClick={fetchCalendarEvents}
-            disabled={fetchingCalendar}
-            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 text-white text-sm rounded-md hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-          >
-            {fetchingCalendar ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              'Fetch Events'
+          <div className="flex gap-2">
+            {calendarNeedsAuth && (
+              <button
+                type="button"
+                onClick={reauthenticateCalendar}
+                className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 text-white text-sm rounded-md hover:bg-amber-500 transition-colors"
+              >
+                <AlertCircle className="w-4 h-4" />
+                Re-authenticate
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={fetchCalendarEvents}
+              disabled={fetchingCalendar || calendarNeedsAuth}
+              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 text-white text-sm rounded-md hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            >
+              {fetchingCalendar ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Fetch Events'
+              )}
+            </button>
+          </div>
         </div>
         
         {calendarEvents.length > 0 && (
@@ -255,7 +274,7 @@ export default function EntryForm({
           </div>
         )}
 
-        {calendarEvents.length === 0 && !fetchingCalendar && !error && (
+        {calendarEvents.length === 0 && !fetchingCalendar && !calendarNeedsAuth && (
           <p className="text-sm text-zinc-500">
             Click &quot;Fetch Events&quot; to pull today&apos;s calendar
           </p>
@@ -284,7 +303,6 @@ export default function EntryForm({
             rows={4}
           />
         </div>
-      </div>
 
       <div className="space-y-2">
         <Label htmlFor="morning">Morning</Label>
