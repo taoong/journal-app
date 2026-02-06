@@ -102,12 +102,6 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const prevYear = new Date(calendarYear - 1, calendarMonth, 1)
   const nextYear = new Date(calendarYear + 1, calendarMonth, 1)
 
-  // Helper to build calendar nav URL
-  const calendarUrl = (date: Date) =>
-    `/entries?view=calendar&month=${date.getMonth() + 1}&year=${date.getFullYear()}`
-
-  const isCurrentMonth = calendarMonth === today.getMonth() && calendarYear === today.getFullYear()
-
   // Get entries for calendar (selected month)
   const { data: calendarEntries } = await supabase
     .from('entries')
@@ -115,6 +109,12 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     .eq('user_id', user?.id)
     .gte('date', format(monthStart, 'yyyy-MM-dd'))
     .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+
+  // Helper to build calendar nav URL
+  const calendarUrl = (date: Date) =>
+    `/entries?view=calendar&month=${date.getMonth() + 1}&year=${date.getFullYear()}`
+
+  const isCurrentMonth = calendarMonth === today.getMonth() && calendarYear === today.getFullYear()
 
   // Map entries by date with completion status: 'complete' | 'incomplete' | undefined
   const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: any) => {
