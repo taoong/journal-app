@@ -66,3 +66,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 Main tables: `entries`, `tags`, `entry_tags` (junction), `calendar_events`
 
 All tables use RLS policies enforcing user data isolation. P/L scores validated as 1-10 in database.
+
+## Workflow Preferences
+
+- When fixing bugs or making changes, automatically commit and push if the build passes and everything looks good. No need to ask for confirmation.
