@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSupabase } from '@/lib/supabase'
-import { Textarea } from '@/components/ui/textarea'
+import { DebouncedTextarea } from '@/components/ui/debounced-textarea'
+import { DebouncedInput } from '@/components/ui/debounced-input'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
@@ -57,6 +58,32 @@ interface FormState {
   weight: string
 }
 
+// Memoized tag button to prevent re-renders
+const TagButton = memo(function TagButton({
+  tag,
+  isSelected,
+  onToggle,
+}: {
+  tag: TagType
+  isSelected: boolean
+  onToggle: (id: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(tag.id)}
+      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-colors ${
+        isSelected
+          ? 'bg-zinc-900 text-white'
+          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+      }`}
+    >
+      {tag.name}
+      {isSelected && <Check className="w-3 h-3" />}
+    </button>
+  )
+})
+
 export default function EntryForm({
   initialDate,
   entry,
@@ -90,6 +117,10 @@ export default function EntryForm({
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [fetchingCalendar, setFetchingCalendar] = useState(false)
   const [calendarNeedsAuth, setCalendarNeedsAuth] = useState(false)
+
+  // Local slider state for immediate visual feedback
+  const [localPScore, setLocalPScore] = useState(form.pScore)
+  const [localLScore, setLocalLScore] = useState(form.lScore)
 
   // Memoized form field updater
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
@@ -310,22 +341,22 @@ export default function EntryForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label htmlFor="highlights-high">Highlights</Label>
-          <Textarea
+          <DebouncedTextarea
             id="highlights-high"
             placeholder="What went well today?"
             value={form.highlightsHigh}
-            onChange={(e) => updateField('highlightsHigh', e.target.value)}
+            onChange={(value) => updateField('highlightsHigh', value)}
             rows={4}
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="highlights-low">Lowlights</Label>
-          <Textarea
+          <DebouncedTextarea
             id="highlights-low"
             placeholder="What could have been better?"
             value={form.highlightsLow}
-            onChange={(e) => updateField('highlightsLow', e.target.value)}
+            onChange={(value) => updateField('highlightsLow', value)}
             rows={4}
           />
         </div>
@@ -333,33 +364,33 @@ export default function EntryForm({
 
       <div className="space-y-2">
         <Label htmlFor="morning">Morning</Label>
-        <Textarea
+        <DebouncedTextarea
           id="morning"
           placeholder="How was your morning?"
           value={form.morning}
-          onChange={(e) => updateField('morning', e.target.value)}
+          onChange={(value) => updateField('morning', value)}
           rows={5}
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="afternoon">Afternoon</Label>
-        <Textarea
+        <DebouncedTextarea
           id="afternoon"
           placeholder="How was your afternoon?"
           value={form.afternoon}
-          onChange={(e) => updateField('afternoon', e.target.value)}
+          onChange={(value) => updateField('afternoon', value)}
           rows={5}
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="night">Night</Label>
-        <Textarea
+        <DebouncedTextarea
           id="night"
           placeholder="How was your evening?"
           value={form.night}
-          onChange={(e) => updateField('night', e.target.value)}
+          onChange={(value) => updateField('night', value)}
           rows={5}
         />
       </div>
@@ -368,11 +399,12 @@ export default function EntryForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label>P Score</Label>
-            <span className="text-sm font-medium text-zinc-600">{form.pScore}/10</span>
+            <span className="text-sm font-medium text-zinc-600">{localPScore}/10</span>
           </div>
           <Slider
-            value={[form.pScore]}
-            onValueChange={([value]) => updateField('pScore', value)}
+            value={[localPScore]}
+            onValueChange={([value]) => setLocalPScore(value)}
+            onValueCommit={([value]) => updateField('pScore', value)}
             min={1}
             max={10}
             step={1}
@@ -382,11 +414,12 @@ export default function EntryForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label>L Score</Label>
-            <span className="text-sm font-medium text-zinc-600">{form.lScore}/10</span>
+            <span className="text-sm font-medium text-zinc-600">{localLScore}/10</span>
           </div>
           <Slider
-            value={[form.lScore]}
-            onValueChange={([value]) => updateField('lScore', value)}
+            value={[localLScore]}
+            onValueChange={([value]) => setLocalLScore(value)}
+            onValueCommit={([value]) => updateField('lScore', value)}
             min={1}
             max={10}
             step={1}
@@ -395,13 +428,13 @@ export default function EntryForm({
 
         <div className="space-y-2">
           <Label htmlFor="weight">Weight</Label>
-          <Input
+          <DebouncedInput
             id="weight"
             type="number"
             step="0.1"
             placeholder="lbs"
             value={form.weight}
-            onChange={(e) => updateField('weight', e.target.value)}
+            onChange={(value) => updateField('weight', value)}
           />
         </div>
       </div>
@@ -410,19 +443,12 @@ export default function EntryForm({
         <Label>Tags</Label>
         <div className="flex flex-wrap gap-2">
           {availableTags.map((tag) => (
-            <button
+            <TagButton
               key={tag.id}
-              type="button"
-              onClick={() => handleTagToggle(tag.id)}
-              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-colors ${
-                tags.has(tag.id)
-                  ? 'bg-zinc-900 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-              }`}
-            >
-              {tag.name}
-              {tags.has(tag.id) && <Check className="w-3 h-3" />}
-            </button>
+              tag={tag}
+              isSelected={tags.has(tag.id)}
+              onToggle={handleTagToggle}
+            />
           ))}
         </div>
         <div className="flex gap-2">

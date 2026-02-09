@@ -1,14 +1,14 @@
 import { createServerSupabase } from '@/lib/supabase-server'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns'
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
-import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 
 const PAGE_SIZE = 10
 
-export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string }> }) {
-  const { view, q, tag, from, to, page } = await searchParams
+export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string; month?: string; year?: string }> }) {
+  const { view, q, tag, from, to, page, month, year } = await searchParams
   const currentPage = parseInt(page || '1')
   const offset = (currentPage - 1) * PAGE_SIZE
   
@@ -86,12 +86,29 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
+  // Calendar month/year from URL or default to current
   const today = new Date()
-  const monthStart = startOfMonth(today)
-  const monthEnd = endOfMonth(today)
+  const calendarYear = year ? parseInt(year) : today.getFullYear()
+  const calendarMonth = month ? parseInt(month) - 1 : today.getMonth()
+  const calendarDate = new Date(calendarYear, calendarMonth, 1)
+
+  const monthStart = startOfMonth(calendarDate)
+  const monthEnd = endOfMonth(calendarDate)
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
 
-  // Get entries for calendar (only current month for efficiency)
+  // Navigation dates
+  const prevMonth = subMonths(calendarDate, 1)
+  const nextMonth = addMonths(calendarDate, 1)
+  const prevYear = new Date(calendarYear - 1, calendarMonth, 1)
+  const nextYear = new Date(calendarYear + 1, calendarMonth, 1)
+
+  // Helper to build calendar nav URL
+  const calendarUrl = (date: Date) =>
+    `/entries?view=calendar&month=${date.getMonth() + 1}&year=${date.getFullYear()}`
+
+  const isCurrentMonth = calendarMonth === today.getMonth() && calendarYear === today.getFullYear()
+
+  // Get entries for calendar (selected month)
   const { data: calendarEntries } = await supabase
     .from('entries')
     .select('date, complete')
@@ -246,9 +263,57 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
         {/* Calendar View */}
         {view === 'calendar' ? (
           <div className="bg-white rounded-xl border border-zinc-200 p-6">
-            <h2 className="text-lg font-medium text-zinc-900 mb-4">
-              {format(today, 'MMMM yyyy')}
-            </h2>
+            {/* Calendar Navigation */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-1">
+                <Link
+                  href={calendarUrl(prevYear)}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                  title="Previous year"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </Link>
+                <Link
+                  href={calendarUrl(prevMonth)}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                  title="Previous month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Link>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-medium text-zinc-900">
+                  {format(calendarDate, 'MMMM yyyy')}
+                </h2>
+                {!isCurrentMonth && (
+                  <Link
+                    href="/entries?view=calendar"
+                    className="text-xs px-2 py-1 bg-zinc-100 text-zinc-600 rounded hover:bg-zinc-200 transition-colors"
+                  >
+                    Today
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Link
+                  href={calendarUrl(nextMonth)}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                  title="Next month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href={calendarUrl(nextYear)}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                  title="Next year"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+
             <div className="grid grid-cols-7 gap-1">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                 <div key={day} className="text-center text-xs font-medium text-zinc-400 py-2">
