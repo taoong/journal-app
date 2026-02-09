@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, useMemo, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSupabase } from '@/lib/supabase'
@@ -126,6 +126,28 @@ export default function EntryForm({
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [field]: value }))
   }, [])
+
+  // Stable memoized handlers for debounced components
+  const fieldHandlers = useMemo(() => ({
+    highlightsHigh: (value: string) => updateField('highlightsHigh', value),
+    highlightsLow: (value: string) => updateField('highlightsLow', value),
+    morning: (value: string) => updateField('morning', value),
+    afternoon: (value: string) => updateField('afternoon', value),
+    night: (value: string) => updateField('night', value),
+    weight: (value: string) => updateField('weight', value),
+  }), [updateField])
+
+  // Stable memoized handlers for sliders
+  const sliderHandlers = useMemo(() => ({
+    pScore: {
+      onChange: ([value]: number[]) => setLocalPScore(value),
+      onCommit: ([value]: number[]) => updateField('pScore', value),
+    },
+    lScore: {
+      onChange: ([value]: number[]) => setLocalLScore(value),
+      onCommit: ([value]: number[]) => updateField('lScore', value),
+    },
+  }), [updateField])
 
   const handleTagToggle = useCallback((tagId: string) => {
     setTags(prev => {
@@ -345,7 +367,7 @@ export default function EntryForm({
             id="highlights-high"
             placeholder="What went well today?"
             value={form.highlightsHigh}
-            onChange={(value) => updateField('highlightsHigh', value)}
+            onChange={fieldHandlers.highlightsHigh}
             rows={4}
           />
         </div>
@@ -356,7 +378,7 @@ export default function EntryForm({
             id="highlights-low"
             placeholder="What could have been better?"
             value={form.highlightsLow}
-            onChange={(value) => updateField('highlightsLow', value)}
+            onChange={fieldHandlers.highlightsLow}
             rows={4}
           />
         </div>
@@ -368,7 +390,7 @@ export default function EntryForm({
           id="morning"
           placeholder="How was your morning?"
           value={form.morning}
-          onChange={(value) => updateField('morning', value)}
+          onChange={fieldHandlers.morning}
           rows={5}
         />
       </div>
@@ -379,7 +401,7 @@ export default function EntryForm({
           id="afternoon"
           placeholder="How was your afternoon?"
           value={form.afternoon}
-          onChange={(value) => updateField('afternoon', value)}
+          onChange={fieldHandlers.afternoon}
           rows={5}
         />
       </div>
@@ -390,7 +412,7 @@ export default function EntryForm({
           id="night"
           placeholder="How was your evening?"
           value={form.night}
-          onChange={(value) => updateField('night', value)}
+          onChange={fieldHandlers.night}
           rows={5}
         />
       </div>
@@ -403,8 +425,8 @@ export default function EntryForm({
           </div>
           <Slider
             value={[localPScore]}
-            onValueChange={([value]) => setLocalPScore(value)}
-            onValueCommit={([value]) => updateField('pScore', value)}
+            onValueChange={sliderHandlers.pScore.onChange}
+            onValueCommit={sliderHandlers.pScore.onCommit}
             min={1}
             max={10}
             step={1}
@@ -418,8 +440,8 @@ export default function EntryForm({
           </div>
           <Slider
             value={[localLScore]}
-            onValueChange={([value]) => setLocalLScore(value)}
-            onValueCommit={([value]) => updateField('lScore', value)}
+            onValueChange={sliderHandlers.lScore.onChange}
+            onValueCommit={sliderHandlers.lScore.onCommit}
             min={1}
             max={10}
             step={1}
@@ -434,7 +456,7 @@ export default function EntryForm({
             step="0.1"
             placeholder="lbs"
             value={form.weight}
-            onChange={(value) => updateField('weight', value)}
+            onChange={fieldHandlers.weight}
           />
         </div>
       </div>

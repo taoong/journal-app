@@ -22,6 +22,12 @@ export const DebouncedInput = memo(function DebouncedInput({
   const [localValue, setLocalValue] = useState(externalValue)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isTypingRef = useRef(false)
+  const onChangeRef = useRef(onChange)
+
+  // Keep onChange ref updated
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
 
   // Sync external value when not typing
   useEffect(() => {
@@ -41,10 +47,10 @@ export const DebouncedInput = memo(function DebouncedInput({
     }
 
     timeoutRef.current = setTimeout(() => {
-      onChange(newValue)
+      onChangeRef.current(newValue)
       isTypingRef.current = false
     }, delay)
-  }, [onChange, delay])
+  }, [delay])
 
   // Cleanup on unmount
   useEffect(() => {
