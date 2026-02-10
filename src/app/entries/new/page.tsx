@@ -48,7 +48,7 @@ export default async function NewEntryPage({
       </div>
 
       <div className="max-w-2xl mx-auto py-6 px-4">
-        <EntryForm 
+        <EntryForm
           initialDate={today}
           availableTags={tags || []}
           userId={user.id}

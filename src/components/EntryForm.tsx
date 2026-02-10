@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, memo } from 'react'
+import { useState, useCallback, useMemo, memo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSupabase } from '@/lib/supabase'
@@ -9,7 +9,7 @@ import { DebouncedInput } from '@/components/ui/debounced-input'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
-import { Calendar, Plus, Loader2, Check, AlertCircle } from 'lucide-react'
+import { Calendar, Plus, Loader2, Check, AlertCircle, AlertTriangle } from 'lucide-react'
 
 interface TagType {
   id: string
@@ -118,9 +118,32 @@ export default function EntryForm({
   const [fetchingCalendar, setFetchingCalendar] = useState(false)
   const [calendarNeedsAuth, setCalendarNeedsAuth] = useState(false)
 
+  // Existing entry detection (for new entry mode only)
+  const [existingEntryDate, setExistingEntryDate] = useState<string | null>(null)
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const isNewEntry = !entry
+
   // Local slider state for immediate visual feedback
   const [localPScore, setLocalPScore] = useState(form.pScore)
   const [localLScore, setLocalLScore] = useState(form.lScore)
+
+  // Check for existing entry when date changes (only in new entry mode)
+  useEffect(() => {
+    if (!isNewEntry) return
+
+    const checkExistingEntry = async () => {
+      const { data } = await supabase
+        .from('entries')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('date', form.date)
+        .maybeSingle()
+
+      setExistingEntryDate(data ? form.date : null)
+    }
+
+    checkExistingEntry()
+  }, [form.date, isNewEntry, supabase, userId])
 
   // Memoized form field updater
   const updateField = useCallback(<K extends keyof FormState>(field: K, value: FormState[K]) => {
@@ -183,8 +206,15 @@ export default function EntryForm({
     }
   }, [newTag, supabase, userId])
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent, forceOverwrite = false) => {
     e.preventDefault()
+
+    // If we're creating a new entry and one exists for this date, require confirmation
+    if (isNewEntry && existingEntryDate && !forceOverwrite) {
+      setShowOverwriteConfirm(true)
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -235,7 +265,14 @@ export default function EntryForm({
     } finally {
       setLoading(false)
     }
-  }, [form, tags, userId, supabase, router])
+  }, [form, tags, userId, supabase, router, isNewEntry, existingEntryDate])
+
+  const handleConfirmOverwrite = useCallback(() => {
+    setShowOverwriteConfirm(false)
+    // Create a synthetic form event to pass to handleSubmit
+    const syntheticEvent = { preventDefault: () => {} } as React.FormEvent
+    handleSubmit(syntheticEvent, true)
+  }, [handleSubmit])
 
   const fetchCalendarEvents = useCallback(async () => {
     setFetchingCalendar(true)
@@ -289,6 +326,23 @@ export default function EntryForm({
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>{error}</div>
+        </div>
+      )}
+
+      {/* Warning: Entry already exists for this date */}
+      {isNewEntry && existingEntryDate && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-500" />
+          <div className="flex-1">
+            <p className="font-medium">An entry already exists for this date</p>
+            <p className="mt-1 text-amber-700">Creating a new entry will overwrite the existing one.</p>
+            <Link
+              href={`/entries/${existingEntryDate}`}
+              className="inline-flex items-center gap-1 mt-2 px-3 py-1.5 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-500 transition-colors"
+            >
+              Edit existing entry
+            </Link>
+          </div>
         </div>
       )}
 
@@ -529,6 +583,49 @@ export default function EntryForm({
           Cancel
         </Link>
       </div>
+
+      {/* Overwrite Confirmation Modal */}
+      {showOverwriteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-zinc-900">Overwrite existing entry?</h3>
+                <p className="mt-2 text-sm text-zinc-600">
+                  You already have an entry for <strong>{existingEntryDate}</strong>.
+                  This action will permanently replace all content in that entry with what you&apos;ve written here.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowOverwriteConfirm(false)}
+                className="px-4 py-2 bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <Link
+                href={`/entries/${existingEntryDate}`}
+                className="px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors font-medium"
+              >
+                Edit existing entry
+              </Link>
+              <button
+                type="button"
+                onClick={handleConfirmOverwrite}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 disabled:opacity-50 transition-colors font-medium"
+              >
+                {loading ? 'Overwriting...' : 'Overwrite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   )
 }
