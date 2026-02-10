@@ -23,10 +23,10 @@ interface TimelineWidgetProps {
   compact?: boolean
 }
 
-// Timeline runs from 6am to 11pm (17 hours)
+// Timeline runs from 6am to 6am next day (24 hours, a full "logical day")
+// Early morning hours (midnight-6am) are treated as "late night" (hours 24-30)
 const TIMELINE_START_HOUR = 6
-const TIMELINE_END_HOUR = 23
-const TIMELINE_HOURS = TIMELINE_END_HOUR - TIMELINE_START_HOUR
+const TIMELINE_HOURS = 24      // Full 24-hour span
 
 // Color palette for locations
 const LOCATION_COLORS = [
@@ -46,20 +46,35 @@ function getLocationColor(index: number): string {
 
 /**
  * Convert a Date or ISO string to percentage position on timeline
+ * Treats early morning (midnight-6am) as "late night" (hours 24-30)
  */
 function timeToPercent(time: Date | string): number {
   const date = typeof time === 'string' ? new Date(time) : time
-  const hours = date.getHours() + date.getMinutes() / 60
+  let hours = date.getHours() + date.getMinutes() / 60
+
+  // Treat early morning (midnight-6am) as late night (hours 24-30)
+  if (hours < TIMELINE_START_HOUR) {
+    hours += 24
+  }
+
   const percent = ((hours - TIMELINE_START_HOUR) / TIMELINE_HOURS) * 100
   return Math.max(0, Math.min(100, percent))
 }
 
 /**
  * Convert percentage position to time
+ * Handles late-night hours (24-30) which represent the next calendar day
  */
 function percentToTime(percent: number, baseDate: Date): Date {
-  const hours = TIMELINE_START_HOUR + (percent / 100) * TIMELINE_HOURS
+  let hours = TIMELINE_START_HOUR + (percent / 100) * TIMELINE_HOURS
   const result = new Date(baseDate)
+
+  // If hours >= 24, it's the next calendar day
+  if (hours >= 24) {
+    result.setDate(result.getDate() + 1)
+    hours -= 24
+  }
+
   result.setHours(Math.floor(hours), Math.round((hours % 1) * 60), 0, 0)
   return result
 }
@@ -70,6 +85,18 @@ function percentToTime(percent: number, baseDate: Date): Date {
 function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+/**
+ * Get the logical hour for sorting (early AM hours become 24-30)
+ */
+function getLogicalHour(time: Date | string): number {
+  const date = typeof time === 'string' ? new Date(time) : time
+  let hours = date.getHours() + date.getMinutes() / 60
+  if (hours < TIMELINE_START_HOUR) {
+    hours += 24
+  }
+  return hours
 }
 
 export default function TimelineWidget({
@@ -84,6 +111,11 @@ export default function TimelineWidget({
   const [manualBulletIndex, setManualBulletIndex] = useState<number | null>(null)
   const [manualLocationIndex, setManualLocationIndex] = useState<number | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+
+  // Sort places chronologically by logical time (early AM treated as late night)
+  const sortedPlaces = useMemo(() => {
+    return [...places].sort((a, b) => getLogicalHour(a.startTime) - getLogicalHour(b.startTime))
+  }, [places])
   const baseDate = useMemo(() => new Date(date + 'T00:00:00'), [date])
 
   // Calculate current time for indicator
@@ -118,7 +150,7 @@ export default function TimelineWidget({
 
     // Find matching location
     const scrubMs = scrubTime.getTime()
-    const locationIdx = places.findIndex(place => {
+    const locationIdx = sortedPlaces.findIndex(place => {
       const start = new Date(place.startTime).getTime()
       const end = new Date(place.endTime).getTime()
       return scrubMs >= start && scrubMs <= end
@@ -128,7 +160,7 @@ export default function TimelineWidget({
       activeBulletIndex: bulletIdx,
       activeLocationIndex: locationIdx >= 0 ? locationIdx : null,
     }
-  }, [scrubPosition, bullets, places, baseDate, manualBulletIndex, manualLocationIndex])
+  }, [scrubPosition, bullets, sortedPlaces, baseDate, manualBulletIndex, manualLocationIndex])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!timelineRef.current) return
@@ -199,15 +231,15 @@ export default function TimelineWidget({
 
   // Click on a location to jump to it
   const handleLocationClick = useCallback((index: number) => {
-    const place = places[index]
+    const place = sortedPlaces[index]
     if (!place) return
     setScrubPosition(timeToPercent(place.startTime))
     setManualLocationIndex(index)
     setManualBulletIndex(null)
-  }, [places])
+  }, [sortedPlaces])
 
-  // Time labels for the timeline
-  const timeLabels = [6, 9, 12, 15, 18, 21]
+  // Time labels for the timeline (6am to 3am next day)
+  const timeLabels = [6, 9, 12, 15, 18, 21, 24, 27]
 
   if (places.length === 0 && bullets.length === 0) {
     return null
@@ -240,11 +272,15 @@ export default function TimelineWidget({
       <div className="px-4 py-4">
         {/* Time Labels */}
         <div className="flex justify-between text-xs text-zinc-400 mb-2 px-0.5">
-          {timeLabels.map(hour => (
-            <span key={hour}>
-              {hour === 12 ? '12pm' : hour > 12 ? `${hour - 12}pm` : `${hour}am`}
-            </span>
-          ))}
+          {timeLabels.map(hour => {
+            // Handle hours >= 24 (next day)
+            const displayHour = hour >= 24 ? hour - 24 : hour
+            return (
+              <span key={hour}>
+                {displayHour === 0 ? '12am' : displayHour === 12 ? '12pm' : displayHour > 12 ? `${displayHour - 12}pm` : `${displayHour}am`}
+              </span>
+            )
+          })}
         </div>
 
         {/* Timeline Track */}
@@ -257,7 +293,7 @@ export default function TimelineWidget({
           onTouchEnd={handleTouchEnd}
         >
           {/* Location bars */}
-          {places.map((place, index) => {
+          {sortedPlaces.map((place, index) => {
             const startPercent = timeToPercent(place.startTime)
             const endPercent = timeToPercent(place.endTime)
             const width = Math.max(endPercent - startPercent, 2)
@@ -307,9 +343,9 @@ export default function TimelineWidget({
         </div>
 
         {/* Location Legend (below timeline) */}
-        {places.length > 0 && (
+        {sortedPlaces.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-6 pt-2">
-            {places.map((place, index) => {
+            {sortedPlaces.map((place, index) => {
               const isActive = activeLocationIndex === index
               return (
                 <button
@@ -373,24 +409,24 @@ export default function TimelineWidget({
       )}
 
       {/* Active Location Details */}
-      {activeLocationIndex !== null && places[activeLocationIndex] && (
+      {activeLocationIndex !== null && sortedPlaces[activeLocationIndex] && (
         <div className="px-4 pb-4 border-t border-zinc-100 pt-3">
           <div className="flex items-start gap-2">
             <div className={`w-3 h-3 rounded-full mt-0.5 ${getLocationColor(activeLocationIndex)}`} />
             <div className="min-w-0">
               <div className="font-medium text-zinc-900">
-                {places[activeLocationIndex].name}
+                {sortedPlaces[activeLocationIndex].name}
               </div>
-              {places[activeLocationIndex].address && (
+              {sortedPlaces[activeLocationIndex].address && (
                 <div className="text-sm text-zinc-500 truncate">
-                  {places[activeLocationIndex].address}
+                  {sortedPlaces[activeLocationIndex].address}
                 </div>
               )}
               <div className="flex items-center gap-1 text-xs text-zinc-400 mt-1">
                 <Clock className="w-3 h-3" />
-                {formatTime(places[activeLocationIndex].startTime)} - {formatTime(places[activeLocationIndex].endTime)}
+                {formatTime(sortedPlaces[activeLocationIndex].startTime)} - {formatTime(sortedPlaces[activeLocationIndex].endTime)}
                 <span className="text-zinc-300 mx-1">·</span>
-                {places[activeLocationIndex].duration} min
+                {sortedPlaces[activeLocationIndex].duration} min
               </div>
             </div>
           </div>
