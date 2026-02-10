@@ -116,6 +116,16 @@ export default function TimelineWidget({
   const sortedPlaces = useMemo(() => {
     return [...places].sort((a, b) => getLogicalHour(a.startTime) - getLogicalHour(b.startTime))
   }, [places])
+
+  // Sort bullets by their actual/inferred time
+  const sortedBullets = useMemo(() => {
+    return [...bullets].sort((a, b) => {
+      const [aStart] = getBulletTimeRange(a)
+      const [bStart] = getBulletTimeRange(b)
+      return getLogicalHour(aStart) - getLogicalHour(bStart)
+    })
+  }, [bullets])
+
   const baseDate = useMemo(() => new Date(date + 'T00:00:00'), [date])
 
   // Calculate current time for indicator
@@ -145,7 +155,7 @@ export default function TimelineWidget({
     const scrubTime = percentToTime(scrubPosition, baseDate)
 
     // Find matching bullets
-    const matchingBullets = findBulletsAtTime(bullets, scrubTime)
+    const matchingBullets = findBulletsAtTime(sortedBullets, scrubTime)
     const bulletIdx = matchingBullets.length > 0 ? matchingBullets[0].index : null
 
     // Find matching location
@@ -160,7 +170,7 @@ export default function TimelineWidget({
       activeBulletIndex: bulletIdx,
       activeLocationIndex: locationIdx >= 0 ? locationIdx : null,
     }
-  }, [scrubPosition, bullets, sortedPlaces, baseDate, manualBulletIndex, manualLocationIndex])
+  }, [scrubPosition, sortedBullets, sortedPlaces, baseDate, manualBulletIndex, manualLocationIndex])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!timelineRef.current) return
@@ -241,7 +251,7 @@ export default function TimelineWidget({
   // Time labels for the timeline (6am to 3am next day)
   const timeLabels = [6, 9, 12, 15, 18, 21, 24, 27]
 
-  if (places.length === 0 && bullets.length === 0) {
+  if (places.length === 0 && sortedBullets.length === 0) {
     return null
   }
 
@@ -367,10 +377,10 @@ export default function TimelineWidget({
       </div>
 
       {/* Bullets Section */}
-      {bullets.length > 0 && compact && (
+      {sortedBullets.length > 0 && compact && (
         <div className="px-4 pb-4 border-t border-zinc-100 pt-3 max-h-48 overflow-y-auto">
           <div className="space-y-1">
-            {bullets.slice(0, 8).map((bullet) => {
+            {sortedBullets.slice(0, 8).map((bullet) => {
               const isActive = activeBulletIndex === bullet.index
               const hasTime = bullet.timeStart !== undefined
               const [timeStart] = getBulletTimeRange(bullet)
@@ -399,9 +409,9 @@ export default function TimelineWidget({
                 </button>
               )
             })}
-            {bullets.length > 8 && (
+            {sortedBullets.length > 8 && (
               <div className="text-xs text-zinc-400 text-center pt-1">
-                +{bullets.length - 8} more items
+                +{sortedBullets.length - 8} more items
               </div>
             )}
           </div>

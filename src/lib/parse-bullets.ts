@@ -63,6 +63,44 @@ function parseTimeString(timeStr: string): { hours: number; minutes: number } | 
 }
 
 /**
+ * Extract time from anywhere in text (not just prefix) and infer AM/PM from section
+ * Examples:
+ *   "woke up at 7:30" in morning section -> 7:30 AM
+ *   "meeting at 3" in afternoon section -> 3:00 PM
+ *   "dinner at 7:30" in night section -> 7:30 PM
+ */
+function extractTimeFromText(
+  text: string,
+  section: 'morning' | 'afternoon' | 'night'
+): { hours: number; minutes: number } | null {
+  // First try explicit AM/PM times anywhere in text
+  const explicitMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i)
+  if (explicitMatch) {
+    return parseTimeString(explicitMatch[0].replace(/\s/g, ''))
+  }
+
+  // Then try bare times like "7:30" or "at 7" and infer AM/PM from section
+  // Use word boundary to avoid matching numbers in other contexts
+  const bareTimeMatch = text.match(/\b(\d{1,2})(?::(\d{2}))?\b/)
+  if (bareTimeMatch) {
+    const hours = parseInt(bareTimeMatch[1], 10)
+    const minutes = bareTimeMatch[2] ? parseInt(bareTimeMatch[2], 10) : 0
+
+    // Only consider valid clock times (1-12 for bare numbers, or with valid minutes)
+    if (hours >= 1 && hours <= 12 && minutes >= 0 && minutes <= 59) {
+      // Infer AM/PM based on section
+      const isPM = section === 'afternoon' || section === 'night'
+      let actualHours = hours
+      if (isPM && hours !== 12) actualHours += 12
+      if (!isPM && hours === 12) actualHours = 0
+      return { hours: actualHours, minutes }
+    }
+  }
+
+  return null
+}
+
+/**
  * Extract time prefix from a bullet point text
  * Examples:
  *   "9am - Had coffee" -> { start: 9am, end: null, rest: "Had coffee" }
@@ -127,11 +165,7 @@ function parseSection(
   // Split by newlines and filter out empty lines
   const lines = text.split('\n').filter(line => line.trim())
 
-  // Calculate time slots for bullets without explicit times
-  const bulletCount = lines.length
-  const hoursPerBullet = bulletCount > 0 ? (range.end - range.start) / bulletCount : 0
-
-  lines.forEach((line, i) => {
+  lines.forEach((line) => {
     // Remove leading bullet characters
     const cleanedLine = line.replace(/^[\s]*[-•*]\s*/, '').trim()
     if (!cleanedLine) return
@@ -141,10 +175,19 @@ function parseSection(
     // Create dates for explicit times
     let timeStart: Date | undefined
     let timeEnd: Date | undefined
+    let extractedTime: { hours: number; minutes: number } | null = null
 
     if (startTime) {
       timeStart = new Date(date)
       timeStart.setHours(startTime.hours, startTime.minutes, 0, 0)
+      extractedTime = startTime
+    } else {
+      // Try to extract time from anywhere in the text
+      extractedTime = extractTimeFromText(cleanedLine, section)
+      if (extractedTime) {
+        timeStart = new Date(date)
+        timeStart.setHours(extractedTime.hours, extractedTime.minutes, 0, 0)
+      }
     }
 
     if (endTime) {
@@ -152,12 +195,22 @@ function parseSection(
       timeEnd.setHours(endTime.hours, endTime.minutes, 0, 0)
     }
 
-    // Calculate estimated time range based on section and position
-    const estimatedStart = new Date(date)
-    estimatedStart.setHours(range.start + (i * hoursPerBullet), 0, 0, 0)
+    // Calculate estimated time range
+    let estimatedStart: Date
+    let estimatedEnd: Date
 
-    const estimatedEnd = new Date(date)
-    estimatedEnd.setHours(range.start + ((i + 1) * hoursPerBullet), 0, 0, 0)
+    if (extractedTime) {
+      // If we found a time, use it as the center of the range (±30 min)
+      estimatedStart = new Date(date)
+      estimatedStart.setHours(extractedTime.hours, extractedTime.minutes, 0, 0)
+      estimatedEnd = new Date(estimatedStart.getTime() + 60 * 60 * 1000) // 1 hour later
+    } else {
+      // No time found, use section midpoint
+      const midpoint = (range.start + range.end) / 2
+      estimatedStart = new Date(date)
+      estimatedStart.setHours(Math.floor(midpoint), (midpoint % 1) * 60, 0, 0)
+      estimatedEnd = new Date(estimatedStart.getTime() + 60 * 60 * 1000) // 1 hour later
+    }
 
     bullets.push({
       text: rest || cleanedLine,
