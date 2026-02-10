@@ -61,7 +61,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       )
 
       const firstEntryDate = sortedDates[0]
-      const today = new Date().toISOString().split('T')[0]
+      const today = format(new Date(), 'yyyy-MM-dd')
 
       // Create a set of dates with entries and a map for completion status
       const entryDates = new Set(allEntries.map(e => e.date))
@@ -73,7 +73,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       const todayDate = new Date(today)
 
       while (currentDate <= todayDate) {
-        const dateStr = currentDate.toISOString().split('T')[0]
+        const dateStr = format(currentDate, 'yyyy-MM-dd')
         if (!entryDates.has(dateStr) || !completionMap.get(dateStr)) {
           incompleteDays++
         }
