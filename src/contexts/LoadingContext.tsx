@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useCallback, useSyncExternalStore, ReactNode, useMemo } from 'react'
+import { createContext, useContext, useCallback, useSyncExternalStore, useEffect, ReactNode, useMemo } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 
 interface LoadingContextType {
@@ -32,6 +32,12 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const currentUrl = `${pathname}?${searchParams.toString()}`
+
+  // Clear any stale target URL when the provider mounts
+  // This handles the case where user navigates away and back
+  useEffect(() => {
+    setTargetUrl(null)
+  }, [])
 
   // Subscribe to external store
   const pendingUrl = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
