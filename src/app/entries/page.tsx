@@ -1,8 +1,10 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns'
 import Link from 'next/link'
+import NavLink from '@/components/NavLink'
 import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
+import EntriesContent from '@/components/EntriesContent'
 import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 
 const PAGE_SIZE = 10
@@ -234,10 +236,11 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
           </div>
         </form>
 
+        <EntriesContent>
         {/* View Toggle */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Link
+            <NavLink
               href="/entries?view=calendar"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 view === 'calendar' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
@@ -245,8 +248,8 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             >
               <CalendarIcon className="w-4 h-4" />
               Calendar
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               href="/entries?view=list"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 view !== 'calendar' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
@@ -254,7 +257,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             >
               <List className="w-4 h-4" />
               List
-            </Link>
+            </NavLink>
           </div>
           <p className="text-sm text-zinc-500">
             {totalCount} entries
@@ -267,20 +270,20 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             {/* Calendar Navigation */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-1">
-                <Link
+                <NavLink
                   href={calendarUrl(prevYear)}
                   className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                   title="Previous year"
                 >
                   <ChevronsLeft className="w-4 h-4" />
-                </Link>
-                <Link
+                </NavLink>
+                <NavLink
                   href={calendarUrl(prevMonth)}
                   className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                   title="Previous month"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                </Link>
+                </NavLink>
               </div>
 
               <div className="flex items-center gap-3">
@@ -288,30 +291,30 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                   {format(calendarDate, 'MMMM yyyy')}
                 </h2>
                 {!isCurrentMonth && (
-                  <Link
+                  <NavLink
                     href="/entries?view=calendar"
                     className="text-xs px-2 py-1 bg-zinc-100 text-zinc-600 rounded hover:bg-zinc-200 transition-colors"
                   >
                     Today
-                  </Link>
+                  </NavLink>
                 )}
               </div>
 
               <div className="flex items-center gap-1">
-                <Link
+                <NavLink
                   href={calendarUrl(nextMonth)}
                   className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                   title="Next month"
                 >
                   <ChevronRight className="w-4 h-4" />
-                </Link>
-                <Link
+                </NavLink>
+                <NavLink
                   href={calendarUrl(nextYear)}
                   className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                   title="Next year"
                 >
                   <ChevronsRight className="w-4 h-4" />
-                </Link>
+                </NavLink>
               </div>
             </div>
 
@@ -429,6 +432,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             )}
           </div>
         )}
+        </EntriesContent>
       </div>
     </div>
   )
