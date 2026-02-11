@@ -3,8 +3,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { MapPin, Maximize2, Clock } from 'lucide-react'
 import Link from 'next/link'
-import type { ParsedBullet } from '@/lib/parse-bullets'
-import { findBulletsAtTime, getBulletTimeRange, formatTimeDisplay } from '@/lib/parse-bullets'
+import type { ParsedBullet, TimeOfDay } from '@/lib/parse-bullets'
+import { formatTimeDisplay } from '@/lib/parse-bullets'
 
 export interface PlaceVisit {
   name: string
@@ -51,6 +51,22 @@ function getLocationColor(index: number): string {
 function timeToPercent(time: Date | string): number {
   const date = typeof time === 'string' ? new Date(time) : time
   let hours = date.getHours() + date.getMinutes() / 60
+
+  // Treat early morning (midnight-6am) as late night (hours 24-30)
+  if (hours < TIMELINE_START_HOUR) {
+    hours += 24
+  }
+
+  const percent = ((hours - TIMELINE_START_HOUR) / TIMELINE_HOURS) * 100
+  return Math.max(0, Math.min(100, percent))
+}
+
+/**
+ * Convert a TimeOfDay object to percentage position on timeline
+ * Used for bullet positioning to avoid timezone issues
+ */
+function timeOfDayToPercent(time: TimeOfDay): number {
+  let hours = time.hours + time.minutes / 60
 
   // Treat early morning (midnight-6am) as late night (hours 24-30)
   if (hours < TIMELINE_START_HOUR) {
@@ -120,9 +136,13 @@ export default function TimelineWidget({
   // Sort bullets by their actual/inferred time
   const sortedBullets = useMemo(() => {
     return [...bullets].sort((a, b) => {
-      const [aStart] = getBulletTimeRange(a)
-      const [bStart] = getBulletTimeRange(b)
-      return getLogicalHour(aStart) - getLogicalHour(bStart)
+      // Use timeStart for sorting - this avoids timezone issues
+      const aHours = a.timeStart ? a.timeStart.hours + a.timeStart.minutes / 60 : 12 // Default to noon if no time
+      const bHours = b.timeStart ? b.timeStart.hours + b.timeStart.minutes / 60 : 12
+      // Handle early morning as late night
+      const aLogical = aHours < TIMELINE_START_HOUR ? aHours + 24 : aHours
+      const bLogical = bHours < TIMELINE_START_HOUR ? bHours + 24 : bHours
+      return aLogical - bLogical
     })
   }, [bullets])
 
@@ -154,9 +174,21 @@ export default function TimelineWidget({
 
     const scrubTime = percentToTime(scrubPosition, baseDate)
 
-    // Find matching bullets
-    const matchingBullets = findBulletsAtTime(sortedBullets, scrubTime)
-    const bulletIdx = matchingBullets.length > 0 ? matchingBullets[0].index : null
+    // Find matching bullets by comparing scrub position with bullet timeStart
+    // Use a 1-hour window around each bullet's time
+    const scrubHours = TIMELINE_START_HOUR + (scrubPosition / 100) * TIMELINE_HOURS
+    const adjustedScrubHours = scrubHours >= 24 ? scrubHours - 24 : scrubHours
+
+    const matchingBullet = sortedBullets.find(bullet => {
+      if (!bullet.timeStart) return false
+      const bulletHours = bullet.timeStart.hours + bullet.timeStart.minutes / 60
+      // Check if within 30 minutes before or after
+      return Math.abs(bulletHours - adjustedScrubHours) <= 0.5 ||
+        // Handle wraparound at midnight
+        Math.abs((bulletHours + 24) - adjustedScrubHours) <= 0.5 ||
+        Math.abs(bulletHours - (adjustedScrubHours + 24)) <= 0.5
+    })
+    const bulletIdx = matchingBullet ? matchingBullet.index : null
 
     // Find matching location
     const scrubMs = scrubTime.getTime()
@@ -233,8 +265,9 @@ export default function TimelineWidget({
 
   // Click on a bullet to jump to its time
   const handleBulletClick = useCallback((bullet: ParsedBullet) => {
-    const [start] = getBulletTimeRange(bullet)
-    setScrubPosition(timeToPercent(start))
+    if (bullet.timeStart) {
+      setScrubPosition(timeOfDayToPercent(bullet.timeStart))
+    }
     setManualBulletIndex(bullet.index)
     setManualLocationIndex(null)
   }, [])
