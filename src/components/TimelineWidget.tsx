@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { MapPin, Maximize2, Clock } from 'lucide-react'
 import Link from 'next/link'
 import type { ParsedBullet } from '@/lib/parse-bullets'
-import { findBulletsAtTime, getBulletTimeRange } from '@/lib/parse-bullets'
+import { findBulletsAtTime, getBulletTimeRange, formatTimeDisplay } from '@/lib/parse-bullets'
 
 export interface PlaceVisit {
   name: string
@@ -383,7 +383,6 @@ export default function TimelineWidget({
             {sortedBullets.slice(0, 8).map((bullet) => {
               const isActive = activeBulletIndex === bullet.index
               const hasTime = bullet.timeStart !== undefined
-              const [timeStart] = getBulletTimeRange(bullet)
 
               return (
                 <button
@@ -399,9 +398,9 @@ export default function TimelineWidget({
                     isActive ? 'bg-white' : hasTime ? 'bg-zinc-900' : 'bg-zinc-300'
                   }`} />
                   <div className="min-w-0 flex-1">
-                    {hasTime && (
+                    {hasTime && bullet.timeStart && (
                       <span className={`text-xs mr-1.5 ${isActive ? 'text-zinc-300' : 'text-zinc-400'}`}>
-                        {formatTime(timeStart)}
+                        {formatTimeDisplay(bullet.timeStart)}
                       </span>
                     )}
                     <span className="text-sm truncate">{bullet.text}</span>

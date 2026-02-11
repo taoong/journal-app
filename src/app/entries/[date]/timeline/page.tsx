@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import TimelineWidget from '@/components/TimelineWidget'
-import { parseEntry } from '@/lib/parse-bullets'
+import { parseEntry, formatTimeDisplay } from '@/lib/parse-bullets'
 import { ArrowLeft, MapPin } from 'lucide-react'
 
 export default async function TimelinePage({ params }: { params: Promise<{ date: string }> }) {
@@ -125,10 +125,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ date:
                           <div>
                             {bullet.timeStart && (
                               <span className="text-zinc-400 mr-1">
-                                {bullet.timeStart.toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
+                                {formatTimeDisplay(bullet.timeStart)}
                               </span>
                             )}
                             <span className="text-zinc-700">{bullet.text}</span>
@@ -152,10 +149,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ date:
                           <div>
                             {bullet.timeStart && (
                               <span className="text-zinc-400 mr-1">
-                                {bullet.timeStart.toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
+                                {formatTimeDisplay(bullet.timeStart)}
                               </span>
                             )}
                             <span className="text-zinc-700">{bullet.text}</span>
@@ -179,10 +173,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ date:
                           <div>
                             {bullet.timeStart && (
                               <span className="text-zinc-400 mr-1">
-                                {bullet.timeStart.toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
+                                {formatTimeDisplay(bullet.timeStart)}
                               </span>
                             )}
                             <span className="text-zinc-700">{bullet.text}</span>

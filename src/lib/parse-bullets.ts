@@ -2,14 +2,29 @@
  * Bulletpoint parser for extracting time information from journal entries
  */
 
+export interface TimeOfDay {
+  hours: number
+  minutes: number
+}
+
 export interface ParsedBullet {
   text: string
   rawText: string
-  timeStart?: Date
-  timeEnd?: Date
+  timeStart?: TimeOfDay
+  timeEnd?: TimeOfDay
   estimatedTimeRange: [Date, Date]
   section: 'morning' | 'afternoon' | 'night'
   index: number
+}
+
+/**
+ * Format a TimeOfDay object for display (e.g., "8:45 PM" or "12 PM")
+ */
+export function formatTimeDisplay(time: TimeOfDay): string {
+  const hour12 = time.hours % 12 || 12
+  const ampm = time.hours >= 12 ? 'PM' : 'AM'
+  const mins = time.minutes.toString().padStart(2, '0')
+  return mins === '00' ? `${hour12} ${ampm}` : `${hour12}:${mins} ${ampm}`
 }
 
 export interface ParsedEntry {
@@ -172,27 +187,24 @@ function parseSection(
 
     const { startTime, endTime, rest } = extractTimePrefix(cleanedLine)
 
-    // Create dates for explicit times
-    let timeStart: Date | undefined
-    let timeEnd: Date | undefined
+    // Store times as simple {hours, minutes} objects to avoid timezone issues
+    let timeStart: TimeOfDay | undefined
+    let timeEnd: TimeOfDay | undefined
     let extractedTime: { hours: number; minutes: number } | null = null
 
     if (startTime) {
-      timeStart = new Date(date)
-      timeStart.setHours(startTime.hours, startTime.minutes, 0, 0)
+      timeStart = startTime
       extractedTime = startTime
     } else {
       // Try to extract time from anywhere in the text
       extractedTime = extractTimeFromText(cleanedLine, section)
       if (extractedTime) {
-        timeStart = new Date(date)
-        timeStart.setHours(extractedTime.hours, extractedTime.minutes, 0, 0)
+        timeStart = extractedTime
       }
     }
 
     if (endTime) {
-      timeEnd = new Date(date)
-      timeEnd.setHours(endTime.hours, endTime.minutes, 0, 0)
+      timeEnd = endTime
     }
 
     // Calculate estimated time range
@@ -251,31 +263,21 @@ export function parseEntry(
 
 /**
  * Find which bullet(s) match a given time
+ * Uses estimatedTimeRange for matching since it's always populated
  */
 export function findBulletsAtTime(bullets: ParsedBullet[], time: Date): ParsedBullet[] {
   const timeMs = time.getTime()
 
   return bullets.filter(bullet => {
-    // If bullet has explicit times, use those
-    if (bullet.timeStart) {
-      const start = bullet.timeStart.getTime()
-      const end = bullet.timeEnd?.getTime() || start + 60 * 60 * 1000 // Default 1 hour duration
-      return timeMs >= start && timeMs <= end
-    }
-
-    // Otherwise use estimated range
+    // Use estimated range for all matching (it's derived from explicit times when available)
     const [estStart, estEnd] = bullet.estimatedTimeRange
     return timeMs >= estStart.getTime() && timeMs <= estEnd.getTime()
   })
 }
 
 /**
- * Get the time range that a bullet covers (explicit or estimated)
+ * Get the time range that a bullet covers (uses estimatedTimeRange)
  */
 export function getBulletTimeRange(bullet: ParsedBullet): [Date, Date] {
-  if (bullet.timeStart) {
-    const end = bullet.timeEnd || new Date(bullet.timeStart.getTime() + 60 * 60 * 1000)
-    return [bullet.timeStart, end]
-  }
   return bullet.estimatedTimeRange
 }
