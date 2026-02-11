@@ -14,72 +14,6 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
-  
-  // Build query with filters
-  let query = supabase
-    .from('entries')
-    .select(`
-      id, date, p_score, l_score, weight,
-      entry_tags (tags (name))
-    `, { count: 'exact' })
-    .eq('user_id', user?.id)
-
-  // Apply filters
-  if (q) {
-    query = query.or(`highlights_high.ilike.%${q}%,highlights_low.ilike.%${q}%,morning.ilike.%${q}%,afternoon.ilike.%${q}%,night.ilike.%${q}%`)
-  }
-  if (tag) {
-    query = query.eq('entry_tags.tags.name', tag)
-  }
-  if (from) query = query.gte('date', from)
-  if (to) query = query.lte('date', to)
-
-  // Single query with count and pagination
-  const { data: entriesData, count } = await query
-    .order('date', { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1)
-
-  const totalCount = count || 0
-
-  // Derive everything from single query
-  const entries = entriesData?.map((e: any) => ({
-    ...e,
-    entry_tags: e.entry_tags?.map((et: any) => ({ tags: et.tags }))
-  })) || []
-
-  // Get analytics (cached, only on first page)
-  let analytics: any = null
-  if (currentPage === 1) {
-    const { data: allEntries } = await supabase
-      .from('entries')
-      .select('date, complete')
-      .eq('user_id', user?.id)
-
-    if (allEntries && allEntries.length > 0) {
-      const today = format(new Date(), 'yyyy-MM-dd')
-
-      // Create a set of dates with entries and a map for completion status
-      const entryDates = new Set(allEntries.map(e => e.date))
-      const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
-
-      // Count incomplete days (no entry or entry not marked complete) from Sept 1, 2024 to today
-      let incompleteDays = 0
-      const currentDate = new Date('2024-09-01T00:00:00')
-      const todayDate = new Date(today + 'T00:00:00')
-
-      while (currentDate <= todayDate) {
-        const dateStr = format(currentDate, 'yyyy-MM-dd')
-        if (!entryDates.has(dateStr) || !completionMap.get(dateStr)) {
-          incompleteDays++
-        }
-        currentDate.setDate(currentDate.getDate() + 1)
-      }
-
-      analytics = { totalEntries: allEntries.length, incompleteDays }
-    }
-  }
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   // Calendar month/year from URL or default to current
   const today = new Date()
@@ -97,13 +31,85 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const prevYear = new Date(calendarYear - 1, calendarMonth, 1)
   const nextYear = new Date(calendarYear + 1, calendarMonth, 1)
 
-  // Get entries for calendar (selected month)
-  const { data: calendarEntries } = await supabase
+  // Build entries query with filters
+  let entriesQuery = supabase
     .from('entries')
-    .select('date, complete')
+    .select(`
+      id, date, p_score, l_score, weight,
+      entry_tags (tags (name))
+    `, { count: 'exact' })
     .eq('user_id', user?.id)
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+
+  // Apply filters
+  if (q) {
+    entriesQuery = entriesQuery.or(`highlights_high.ilike.%${q}%,highlights_low.ilike.%${q}%,morning.ilike.%${q}%,afternoon.ilike.%${q}%,night.ilike.%${q}%`)
+  }
+  if (tag) {
+    entriesQuery = entriesQuery.eq('entry_tags.tags.name', tag)
+  }
+  if (from) entriesQuery = entriesQuery.gte('date', from)
+  if (to) entriesQuery = entriesQuery.lte('date', to)
+
+  // Run all queries in parallel for better performance
+  const [entriesResult, analyticsResult, calendarResult] = await Promise.all([
+    // Paginated entries query
+    entriesQuery
+      .order('date', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1),
+    // Analytics query (only on first page)
+    currentPage === 1
+      ? supabase
+          .from('entries')
+          .select('date, complete')
+          .eq('user_id', user?.id)
+      : Promise.resolve({ data: null }),
+    // Calendar entries query
+    supabase
+      .from('entries')
+      .select('date, complete')
+      .eq('user_id', user?.id)
+      .gte('date', format(monthStart, 'yyyy-MM-dd'))
+      .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+  ])
+
+  const { data: entriesData, count } = entriesResult
+  const { data: allEntries } = analyticsResult
+  const { data: calendarEntries } = calendarResult
+
+  const totalCount = count || 0
+
+  // Derive everything from entries query
+  const entries = entriesData?.map((e: any) => ({
+    ...e,
+    entry_tags: e.entry_tags?.map((et: any) => ({ tags: et.tags }))
+  })) || []
+
+  // Calculate analytics
+  let analytics: any = null
+  if (currentPage === 1 && allEntries && allEntries.length > 0) {
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+    // Create a set of dates with entries and a map for completion status
+    const entryDates = new Set(allEntries.map(e => e.date))
+    const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
+
+    // Count incomplete days (no entry or entry not marked complete) from Sept 1, 2024 to today
+    let incompleteDays = 0
+    const currentDate = new Date('2024-09-01T00:00:00')
+    const todayDate = new Date(todayStr + 'T00:00:00')
+
+    while (currentDate <= todayDate) {
+      const dateStr = format(currentDate, 'yyyy-MM-dd')
+      if (!entryDates.has(dateStr) || !completionMap.get(dateStr)) {
+        incompleteDays++
+      }
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    analytics = { totalEntries: allEntries.length, incompleteDays }
+  }
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   // Helper to build calendar nav URL
   const calendarUrl = (date: Date) =>
