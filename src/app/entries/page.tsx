@@ -56,25 +56,20 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       .eq('user_id', user?.id)
 
     if (allEntries && allEntries.length > 0) {
-      const sortedDates = allEntries.map(e => e.date).sort((a: string, b: string) =>
-        new Date(a).getTime() - new Date(b).getTime()
-      )
-
-      const firstEntryDate = sortedDates[0]
       const today = format(new Date(), 'yyyy-MM-dd')
 
       // Create a set of dates with entries and a map for completion status
       const entryDates = new Set(allEntries.map(e => e.date))
       const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
 
-      // Count missing days (no entry at all) from first entry to today
+      // Count incomplete days (no entry or entry not marked complete) from Sept 1, 2024 to today
       let incompleteDays = 0
-      const currentDate = new Date(firstEntryDate + 'T00:00:00')
+      const currentDate = new Date('2024-09-01T00:00:00')
       const todayDate = new Date(today + 'T00:00:00')
 
       while (currentDate <= todayDate) {
         const dateStr = format(currentDate, 'yyyy-MM-dd')
-        if (!entryDates.has(dateStr)) {
+        if (!entryDates.has(dateStr) || !completionMap.get(dateStr)) {
           incompleteDays++
         }
         currentDate.setDate(currentDate.getDate() + 1)
