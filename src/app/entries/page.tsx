@@ -370,7 +370,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
           </div>
         ) : (
           /* List View */
-          <div className="space-y-4">
+          <div className="space-y-2">
             {entries.map((entry: any) => {
               const tags = entry.entry_tags
                 ?.map((et: any) => et.tags?.name)
