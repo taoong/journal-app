@@ -42,6 +42,98 @@ const SECTION_RANGES = {
 } as const
 
 /**
+ * Interpolate times for bullets without explicit times based on surrounding anchors
+ * Bullets with explicit times act as "anchors", and bullets without times get
+ * evenly distributed times between anchors.
+ */
+function interpolateTimes(
+  bullets: ParsedBullet[],
+  sectionRange: { start: number; end: number },
+  date: Date
+): void {
+  if (bullets.length === 0) return
+
+  // Find indices of bullets with explicit times (anchors)
+  const anchors: { index: number; hours: number }[] = []
+  bullets.forEach((b, i) => {
+    if (b.timeStart) {
+      anchors.push({ index: i, hours: b.timeStart.hours + b.timeStart.minutes / 60 })
+    }
+  })
+
+  // Helper to set interpolated time on a bullet
+  const setInterpolatedTime = (bullet: ParsedBullet, hours: number) => {
+    const wholeHours = Math.floor(hours)
+    const minutes = Math.round((hours - wholeHours) * 60)
+    // Handle minute overflow (e.g., 59.5 rounds to 60)
+    const adjustedHours = minutes >= 60 ? wholeHours + 1 : wholeHours
+    const adjustedMinutes = minutes >= 60 ? 0 : minutes
+
+    bullet.timeStart = { hours: adjustedHours, minutes: adjustedMinutes }
+
+    // Update estimatedTimeRange based on new interpolated time
+    const estimatedStart = new Date(date)
+    estimatedStart.setHours(adjustedHours, adjustedMinutes, 0, 0)
+    const estimatedEnd = new Date(estimatedStart.getTime() + 60 * 60 * 1000)
+    bullet.estimatedTimeRange = [estimatedStart, estimatedEnd]
+  }
+
+  if (anchors.length === 0) {
+    // No anchors - distribute evenly across section
+    const step = (sectionRange.end - sectionRange.start) / (bullets.length + 1)
+    bullets.forEach((b, i) => {
+      const hours = sectionRange.start + step * (i + 1)
+      setInterpolatedTime(b, hours)
+    })
+    return
+  }
+
+  // Fill gaps between anchors
+
+  // 1. Before first anchor - extrapolate backward from first anchor
+  if (anchors[0].index > 0) {
+    const endHours = anchors[0].hours
+    const startHours = sectionRange.start
+    const count = anchors[0].index
+    const step = (endHours - startHours) / (count + 1)
+    for (let i = 0; i < anchors[0].index; i++) {
+      const hours = startHours + step * (i + 1)
+      setInterpolatedTime(bullets[i], hours)
+    }
+  }
+
+  // 2. Between anchors
+  for (let a = 0; a < anchors.length - 1; a++) {
+    const startIdx = anchors[a].index
+    const endIdx = anchors[a + 1].index
+    const startHours = anchors[a].hours
+    const endHours = anchors[a + 1].hours
+    const gapCount = endIdx - startIdx - 1
+
+    if (gapCount > 0) {
+      const step = (endHours - startHours) / (gapCount + 1)
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        const hours = startHours + step * (i - startIdx)
+        setInterpolatedTime(bullets[i], hours)
+      }
+    }
+  }
+
+  // 3. After last anchor - extrapolate forward from last anchor
+  const lastAnchor = anchors[anchors.length - 1]
+  if (lastAnchor.index < bullets.length - 1) {
+    const startHours = lastAnchor.hours
+    const endHours = sectionRange.end
+    const count = bullets.length - 1 - lastAnchor.index
+    const step = (endHours - startHours) / (count + 1)
+    for (let i = lastAnchor.index + 1; i < bullets.length; i++) {
+      const hours = startHours + step * (i - lastAnchor.index)
+      setInterpolatedTime(bullets[i], hours)
+    }
+  }
+}
+
+/**
  * Parse a time string like "9am", "2:30pm", "14:00" into hours and minutes
  */
 function parseTimeString(timeStr: string): { hours: number; minutes: number } | null {
@@ -234,6 +326,9 @@ function parseSection(
       index: startIndex + bullets.length,
     })
   })
+
+  // Interpolate times for bullets without explicit times
+  interpolateTimes(bullets, range, date)
 
   return bullets
 }
