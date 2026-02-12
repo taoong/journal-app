@@ -23,10 +23,14 @@ interface TimelineWidgetProps {
   compact?: boolean
 }
 
-// Timeline runs from 6am to 6am next day (24 hours, a full "logical day")
-// Early morning hours (midnight-6am) are treated as "late night" (hours 24-30)
-const TIMELINE_START_HOUR = 6
-const TIMELINE_HOURS = 24      // Full 24-hour span
+// Default timeline bounds (6am to midnight)
+const DEFAULT_START_HOUR = 6
+const DEFAULT_END_HOUR = 24    // Midnight (24 = 0 next day)
+
+// Minimum start hour (can extend to show early morning as late night)
+const MIN_START_HOUR = 6
+// Maximum end hour (can extend past midnight into early morning next day)
+const MAX_END_HOUR = 30        // 6am next day
 
 // Color palette for locations
 const LOCATION_COLORS = [
@@ -45,35 +49,47 @@ function getLocationColor(index: number): string {
 }
 
 /**
- * Convert a Date or ISO string to percentage position on timeline
- * Treats early morning (midnight-6am) as "late night" (hours 24-30)
+ * Convert a Date or ISO string to logical hours (early morning becomes 24-30)
  */
-function timeToPercent(time: Date | string): number {
+function getLogicalHoursFromDate(time: Date | string): number {
   const date = typeof time === 'string' ? new Date(time) : time
   let hours = date.getHours() + date.getMinutes() / 60
-
   // Treat early morning (midnight-6am) as late night (hours 24-30)
-  if (hours < TIMELINE_START_HOUR) {
+  if (hours < MIN_START_HOUR) {
     hours += 24
   }
+  return hours
+}
 
-  const percent = ((hours - TIMELINE_START_HOUR) / TIMELINE_HOURS) * 100
+/**
+ * Convert a TimeOfDay to logical hours (early morning becomes 24-30)
+ */
+function getLogicalHoursFromTimeOfDay(time: TimeOfDay): number {
+  let hours = time.hours + time.minutes / 60
+  // Treat early morning (midnight-6am) as late night (hours 24-30)
+  if (hours < MIN_START_HOUR) {
+    hours += 24
+  }
+  return hours
+}
+
+/**
+ * Convert a Date or ISO string to percentage position on timeline
+ */
+function timeToPercent(time: Date | string, startHour: number, endHour: number): number {
+  const hours = getLogicalHoursFromDate(time)
+  const timelineHours = endHour - startHour
+  const percent = ((hours - startHour) / timelineHours) * 100
   return Math.max(0, Math.min(100, percent))
 }
 
 /**
  * Convert a TimeOfDay object to percentage position on timeline
- * Used for bullet positioning to avoid timezone issues
  */
-function timeOfDayToPercent(time: TimeOfDay): number {
-  let hours = time.hours + time.minutes / 60
-
-  // Treat early morning (midnight-6am) as late night (hours 24-30)
-  if (hours < TIMELINE_START_HOUR) {
-    hours += 24
-  }
-
-  const percent = ((hours - TIMELINE_START_HOUR) / TIMELINE_HOURS) * 100
+function timeOfDayToPercent(time: TimeOfDay, startHour: number, endHour: number): number {
+  const hours = getLogicalHoursFromTimeOfDay(time)
+  const timelineHours = endHour - startHour
+  const percent = ((hours - startHour) / timelineHours) * 100
   return Math.max(0, Math.min(100, percent))
 }
 
@@ -81,8 +97,9 @@ function timeOfDayToPercent(time: TimeOfDay): number {
  * Convert percentage position to time
  * Handles late-night hours (24-30) which represent the next calendar day
  */
-function percentToTime(percent: number, baseDate: Date): Date {
-  let hours = TIMELINE_START_HOUR + (percent / 100) * TIMELINE_HOURS
+function percentToTime(percent: number, baseDate: Date, startHour: number, endHour: number): Date {
+  const timelineHours = endHour - startHour
+  let hours = startHour + (percent / 100) * timelineHours
   const result = new Date(baseDate)
 
   // If hours >= 24, it's the next calendar day
@@ -104,15 +121,16 @@ function formatTime(date: Date | string): string {
 }
 
 /**
- * Get the logical hour for sorting (early AM hours become 24-30)
+ * Generate time labels for the timeline based on range
  */
-function getLogicalHour(time: Date | string): number {
-  const date = typeof time === 'string' ? new Date(time) : time
-  let hours = date.getHours() + date.getMinutes() / 60
-  if (hours < TIMELINE_START_HOUR) {
-    hours += 24
+function generateTimeLabels(startHour: number, endHour: number): number[] {
+  const labels: number[] = []
+  // Round start to nearest 3-hour mark
+  const firstLabel = Math.ceil(startHour / 3) * 3
+  for (let hour = firstLabel; hour <= endHour; hour += 3) {
+    labels.push(hour)
   }
-  return hours
+  return labels
 }
 
 export default function TimelineWidget({
@@ -132,21 +150,58 @@ export default function TimelineWidget({
 
   // Sort places chronologically by logical time (early AM treated as late night)
   const sortedPlaces = useMemo(() => {
-    return [...places].sort((a, b) => getLogicalHour(a.startTime) - getLogicalHour(b.startTime))
+    return [...places].sort((a, b) => getLogicalHoursFromDate(a.startTime) - getLogicalHoursFromDate(b.startTime))
   }, [places])
 
   // Sort bullets by their actual/inferred time
   const sortedBullets = useMemo(() => {
     return [...bullets].sort((a, b) => {
       // Use timeStart for sorting - this avoids timezone issues
-      const aHours = a.timeStart ? a.timeStart.hours + a.timeStart.minutes / 60 : 12 // Default to noon if no time
-      const bHours = b.timeStart ? b.timeStart.hours + b.timeStart.minutes / 60 : 12
-      // Handle early morning as late night
-      const aLogical = aHours < TIMELINE_START_HOUR ? aHours + 24 : aHours
-      const bLogical = bHours < TIMELINE_START_HOUR ? bHours + 24 : bHours
-      return aLogical - bLogical
+      const aHours = a.timeStart ? getLogicalHoursFromTimeOfDay(a.timeStart) : 12 // Default to noon if no time
+      const bHours = b.timeStart ? getLogicalHoursFromTimeOfDay(b.timeStart) : 12
+      return aHours - bHours
     })
   }, [bullets])
+
+  // Calculate dynamic timeline range based on data
+  const { timelineStartHour, timelineEndHour } = useMemo(() => {
+    let minHour = DEFAULT_END_HOUR // Start high, find minimum
+    let maxHour = DEFAULT_START_HOUR // Start low, find maximum
+
+    // Check all places
+    for (const place of places) {
+      const startHours = getLogicalHoursFromDate(place.startTime)
+      const endHours = getLogicalHoursFromDate(place.endTime)
+      minHour = Math.min(minHour, startHours)
+      maxHour = Math.max(maxHour, endHours)
+    }
+
+    // Check all bullets with times
+    for (const bullet of bullets) {
+      if (bullet.timeStart) {
+        const hours = getLogicalHoursFromTimeOfDay(bullet.timeStart)
+        minHour = Math.min(minHour, hours)
+        maxHour = Math.max(maxHour, hours + 0.5) // Add 30 min buffer for bullet
+      }
+    }
+
+    // Apply defaults if no data found
+    if (minHour > maxHour) {
+      minHour = DEFAULT_START_HOUR
+      maxHour = DEFAULT_END_HOUR
+    }
+
+    // Clamp to allowed range and apply defaults
+    const startHour = Math.max(MIN_START_HOUR, Math.min(minHour, DEFAULT_START_HOUR))
+    const endHour = Math.min(MAX_END_HOUR, Math.max(maxHour, DEFAULT_END_HOUR))
+
+    return { timelineStartHour: startHour, timelineEndHour: endHour }
+  }, [places, bullets])
+
+  // Generate time labels based on dynamic range
+  const timeLabels = useMemo(() => {
+    return generateTimeLabels(timelineStartHour, timelineEndHour)
+  }, [timelineStartHour, timelineEndHour])
 
   const baseDate = useMemo(() => new Date(date + 'T00:00:00'), [date])
 
@@ -155,10 +210,10 @@ export default function TimelineWidget({
     const now = new Date()
     const today = new Date().toISOString().split('T')[0]
     if (date === today) {
-      return timeToPercent(now)
+      return timeToPercent(now, timelineStartHour, timelineEndHour)
     }
     return null
-  }, [date])
+  }, [date, timelineStartHour, timelineEndHour])
 
   // Derive active bullet/location from scrub position (using useMemo instead of useEffect)
   const { activeBulletIndex, activeLocationIndex } = useMemo(() => {
@@ -174,11 +229,11 @@ export default function TimelineWidget({
       return { activeBulletIndex: null, activeLocationIndex: null }
     }
 
-    const scrubTime = percentToTime(scrubPosition, baseDate)
+    const scrubTime = percentToTime(scrubPosition, baseDate, timelineStartHour, timelineEndHour)
 
     // Find matching bullets by comparing scrub position with bullet timeStart
-    // Use a 1-hour window around each bullet's time
-    const scrubHours = TIMELINE_START_HOUR + (scrubPosition / 100) * TIMELINE_HOURS
+    const timelineHours = timelineEndHour - timelineStartHour
+    const scrubHours = timelineStartHour + (scrubPosition / 100) * timelineHours
     const adjustedScrubHours = scrubHours >= 24 ? scrubHours - 24 : scrubHours
 
     const matchingBullet = sortedBullets.find(bullet => {
@@ -204,7 +259,7 @@ export default function TimelineWidget({
       activeBulletIndex: bulletIdx,
       activeLocationIndex: locationIdx >= 0 ? locationIdx : null,
     }
-  }, [scrubPosition, sortedBullets, sortedPlaces, baseDate, manualBulletIndex, manualLocationIndex])
+  }, [scrubPosition, sortedBullets, sortedPlaces, baseDate, manualBulletIndex, manualLocationIndex, timelineStartHour, timelineEndHour])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!timelineRef.current) return
@@ -278,23 +333,20 @@ export default function TimelineWidget({
   // Click on a bullet to jump to its time
   const handleBulletClick = useCallback((bullet: ParsedBullet) => {
     if (bullet.timeStart) {
-      setScrubPosition(timeOfDayToPercent(bullet.timeStart))
+      setScrubPosition(timeOfDayToPercent(bullet.timeStart, timelineStartHour, timelineEndHour))
     }
     setManualBulletIndex(bullet.index)
     setManualLocationIndex(null)
-  }, [])
+  }, [timelineStartHour, timelineEndHour])
 
   // Click on a location to jump to it
   const handleLocationClick = useCallback((index: number) => {
     const place = sortedPlaces[index]
     if (!place) return
-    setScrubPosition(timeToPercent(place.startTime))
+    setScrubPosition(timeToPercent(place.startTime, timelineStartHour, timelineEndHour))
     setManualLocationIndex(index)
     setManualBulletIndex(null)
-  }, [sortedPlaces])
-
-  // Time labels for the timeline (6am to 3am next day)
-  const timeLabels = [6, 9, 12, 15, 18, 21, 24, 27]
+  }, [sortedPlaces, timelineStartHour, timelineEndHour])
 
   if (places.length === 0 && sortedBullets.length === 0) {
     return null
@@ -349,8 +401,8 @@ export default function TimelineWidget({
         >
           {/* Location bars */}
           {sortedPlaces.map((place, index) => {
-            const startPercent = timeToPercent(place.startTime)
-            const endPercent = timeToPercent(place.endTime)
+            const startPercent = timeToPercent(place.startTime, timelineStartHour, timelineEndHour)
+            const endPercent = timeToPercent(place.endTime, timelineStartHour, timelineEndHour)
             const width = Math.max(endPercent - startPercent, 2)
             const isActive = activeLocationIndex === index
 
@@ -376,7 +428,7 @@ export default function TimelineWidget({
           {/* Bullet position markers */}
           {sortedBullets.map((bullet) => {
             if (!bullet.timeStart) return null
-            const percent = timeOfDayToPercent(bullet.timeStart)
+            const percent = timeOfDayToPercent(bullet.timeStart, timelineStartHour, timelineEndHour)
             const isActive = activeBulletIndex === bullet.index
             // Color based on section
             const markerColor = bullet.section === 'morning'
@@ -414,7 +466,7 @@ export default function TimelineWidget({
               <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-zinc-900 rounded-full shadow" />
               {/* Time tooltip */}
               <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-zinc-700 whitespace-nowrap">
-                {formatTime(percentToTime(scrubPosition, baseDate))}
+                {formatTime(percentToTime(scrubPosition, baseDate, timelineStartHour, timelineEndHour))}
               </div>
             </div>
           )}
