@@ -274,6 +274,10 @@ function parseSection(
   const lines = text.split('\n').filter(line => line.trim())
 
   lines.forEach((line) => {
+    // Skip indented sub-bullets (lines that start with whitespace before the bullet)
+    // These are meant as additional notes for the parent bullet
+    if (/^[\t ]+[-•*]/.test(line)) return
+
     // Remove leading bullet characters
     const cleanedLine = line.replace(/^[\s]*[-•*]\s*/, '').trim()
     if (!cleanedLine) return
