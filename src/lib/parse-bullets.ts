@@ -188,7 +188,8 @@ function extractTimeFromText(
 
   // Then try bare times like "7:30" or "at 7" and infer AM/PM from section
   // Use word boundary to avoid matching numbers in other contexts
-  const bareTimeMatch = text.match(/\b(\d{1,2})(?::(\d{2}))?\b/)
+  // Use negative lookahead to exclude ratings like "4/10" or fractions
+  const bareTimeMatch = text.match(/\b(\d{1,2})(?::(\d{2}))?(?!\/\d)\b/)
   if (bareTimeMatch) {
     const hours = parseInt(bareTimeMatch[1], 10)
     const minutes = bareTimeMatch[2] ? parseInt(bareTimeMatch[2], 10) : 0
