@@ -448,7 +448,7 @@ export default function TimelineWidget({
       {sortedBullets.length > 0 && compact && (
         <div ref={bulletsContainerRef} className="px-4 pb-4 border-t border-zinc-100 pt-3 max-h-48 overflow-y-auto">
           <div className="space-y-1">
-            {sortedBullets.slice(0, 8).map((bullet) => {
+            {sortedBullets.map((bullet) => {
               const isActive = activeBulletIndex === bullet.index
               const hasTime = bullet.timeStart !== undefined
 
@@ -480,11 +480,6 @@ export default function TimelineWidget({
                 </button>
               )
             })}
-            {sortedBullets.length > 8 && (
-              <div className="text-xs text-zinc-400 text-center pt-1">
-                +{sortedBullets.length - 8} more items
-              </div>
-            )}
           </div>
         </div>
       )}
