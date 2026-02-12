@@ -127,6 +127,8 @@ export default function TimelineWidget({
   const [manualBulletIndex, setManualBulletIndex] = useState<number | null>(null)
   const [manualLocationIndex, setManualLocationIndex] = useState<number | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const bulletsContainerRef = useRef<HTMLDivElement>(null)
+  const bulletRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
 
   // Sort places chronologically by logical time (early AM treated as late night)
   const sortedPlaces = useMemo(() => {
@@ -237,6 +239,16 @@ export default function TimelineWidget({
       }
     }
   }, [isDragging, handleMouseMove, handleMouseUp])
+
+  // Auto-scroll to active bullet when scrubbing
+  useEffect(() => {
+    if (activeBulletIndex === null || !isDragging) return
+
+    const bulletEl = bulletRefs.current.get(activeBulletIndex)
+    if (bulletEl && bulletsContainerRef.current) {
+      bulletEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [activeBulletIndex, isDragging])
 
   // Handle touch events
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -361,6 +373,29 @@ export default function TimelineWidget({
             )
           })}
 
+          {/* Bullet position markers */}
+          {sortedBullets.map((bullet) => {
+            if (!bullet.timeStart) return null
+            const percent = timeOfDayToPercent(bullet.timeStart)
+            const isActive = activeBulletIndex === bullet.index
+            // Color based on section
+            const markerColor = bullet.section === 'morning'
+              ? 'bg-amber-400'
+              : bullet.section === 'afternoon'
+              ? 'bg-blue-400'
+              : 'bg-purple-400'
+
+            return (
+              <div
+                key={`marker-${bullet.index}`}
+                className={`absolute top-0 w-0.5 rounded-b transition-all ${markerColor} ${
+                  isActive ? 'opacity-100 h-3' : 'opacity-50 h-2'
+                }`}
+                style={{ left: `${percent}%`, transform: 'translateX(-50%)' }}
+              />
+            )
+          })}
+
           {/* Current time indicator (if today) */}
           {currentTime !== null && (
             <div
@@ -411,7 +446,7 @@ export default function TimelineWidget({
 
       {/* Bullets Section */}
       {sortedBullets.length > 0 && compact && (
-        <div className="px-4 pb-4 border-t border-zinc-100 pt-3 max-h-48 overflow-y-auto">
+        <div ref={bulletsContainerRef} className="px-4 pb-4 border-t border-zinc-100 pt-3 max-h-48 overflow-y-auto">
           <div className="space-y-1">
             {sortedBullets.slice(0, 8).map((bullet) => {
               const isActive = activeBulletIndex === bullet.index
@@ -420,6 +455,10 @@ export default function TimelineWidget({
               return (
                 <button
                   key={bullet.index}
+                  ref={(el) => {
+                    if (el) bulletRefs.current.set(bullet.index, el)
+                    else bulletRefs.current.delete(bullet.index)
+                  }}
                   onClick={() => handleBulletClick(bullet)}
                   className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-lg transition-colors ${
                     isActive
