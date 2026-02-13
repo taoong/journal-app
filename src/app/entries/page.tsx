@@ -4,6 +4,7 @@ import Link from 'next/link'
 import NavLink from '@/components/NavLink'
 import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
+import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
 import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 
@@ -42,7 +43,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     `, { count: 'exact' })
     .eq('user_id', user?.id)
 
-  // Apply filters
+  // Apply filters (but NOT incomplete - we handle that separately)
   if (q) {
     entriesQuery = entriesQuery.or(`highlights_high.ilike.%${q}%,highlights_low.ilike.%${q}%,morning.ilike.%${q}%,afternoon.ilike.%${q}%,night.ilike.%${q}%`)
   }
@@ -51,19 +52,22 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   }
   if (from) entriesQuery = entriesQuery.gte('date', from)
   if (to) entriesQuery = entriesQuery.lte('date', to)
+  // Only apply incomplete filter to DB query if not active (we handle it in JS for missing days)
   if (incomplete) entriesQuery = entriesQuery.eq('complete', false)
 
   // Run all queries in parallel for better performance
   const [entriesResult, analyticsResult, calendarResult] = await Promise.all([
-    // Paginated entries query
-    entriesQuery
-      .order('date', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1),
-    // Analytics query (only on first page)
-    currentPage === 1
+    // Paginated entries query (only when NOT using incomplete filter, since we paginate differently)
+    incomplete
+      ? Promise.resolve({ data: null, count: null })
+      : entriesQuery
+          .order('date', { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1),
+    // Analytics query (on first page OR when incomplete filter is active)
+    currentPage === 1 || incomplete
       ? supabase
           .from('entries')
-          .select('date, complete')
+          .select('date, complete, id, p_score, l_score, weight')
           .eq('user_id', user?.id)
       : Promise.resolve({ data: null }),
     // Calendar entries query
@@ -79,7 +83,37 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const { data: allEntries } = analyticsResult
   const { data: calendarEntries } = calendarResult
 
-  const totalCount = count || 0
+  // Build incomplete days list when incomplete filter is active
+  let incompleteDays: Array<{ date: string; type: 'missing' | 'incomplete'; entry?: any }> = []
+  let incompleteTotalCount = 0
+
+  if (incomplete && allEntries) {
+    const startDate = new Date('2024-09-01T00:00:00')
+    const todayDate = new Date(format(today, 'yyyy-MM-dd') + 'T00:00:00')
+    const entryDates = new Set(allEntries.map(e => e.date))
+    const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
+    const entriesByDate = new Map(allEntries.map(e => [e.date, e]))
+
+    const allIncompleteDays: typeof incompleteDays = []
+
+    for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = format(d, 'yyyy-MM-dd')
+      if (!entryDates.has(dateStr)) {
+        allIncompleteDays.push({ date: dateStr, type: 'missing' })
+      } else if (!completionMap.get(dateStr)) {
+        allIncompleteDays.push({ date: dateStr, type: 'incomplete', entry: entriesByDate.get(dateStr) })
+      }
+    }
+
+    // Sort descending (most recent first)
+    allIncompleteDays.sort((a, b) => b.date.localeCompare(a.date))
+    incompleteTotalCount = allIncompleteDays.length
+
+    // Paginate
+    incompleteDays = allIncompleteDays.slice(offset, offset + PAGE_SIZE)
+  }
+
+  const totalCount = incomplete ? incompleteTotalCount : (count || 0)
 
   // Derive everything from entries query
   const entries = entriesData?.map((e: any) => ({
@@ -391,17 +425,29 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
         ) : (
           /* List View */
           <div className="space-y-2">
-            {entries.map((entry: any) => {
-              const tags = entry.entry_tags
-                ?.map((et: any) => et.tags?.name)
-                .filter((name: unknown): name is string => typeof name === 'string') || []
-              
-              return (
-                <EntryCard key={entry.id} entry={entry} tags={tags} />
+            {incomplete ? (
+              // Render incomplete days (missing + incomplete entries)
+              incompleteDays.map((day) =>
+                day.type === 'missing' ? (
+                  <MissingDayCard key={day.date} date={day.date} />
+                ) : (
+                  <EntryCard key={day.date} entry={day.entry} tags={[]} />
+                )
               )
-            })}
+            ) : (
+              // Render regular entries
+              entries.map((entry: any) => {
+                const tags = entry.entry_tags
+                  ?.map((et: any) => et.tags?.name)
+                  .filter((name: unknown): name is string => typeof name === 'string') || []
 
-            {entries.length === 0 && (
+                return (
+                  <EntryCard key={entry.id} entry={entry} tags={tags} />
+                )
+              })
+            )}
+
+            {((incomplete && incompleteDays.length === 0) || (!incomplete && entries.length === 0)) && (
               <div className="text-center py-16">
                 <p className="text-zinc-500 mb-4">No entries found</p>
                 <Link
