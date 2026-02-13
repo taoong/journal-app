@@ -93,7 +93,7 @@ export default async function SettingsPage() {
                   </span>
                 ) : (
                   <a
-                    href="/api/oauth/oura"
+                    href={`/api/oauth/oura?user_id=${user?.id}`}
                     className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
