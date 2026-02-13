@@ -9,8 +9,8 @@ import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, Chev
 
 const PAGE_SIZE = 10
 
-export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string; month?: string; year?: string }> }) {
-  const { view, q, tag, from, to, page, month, year } = await searchParams
+export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string; month?: string; year?: string; incomplete?: string }> }) {
+  const { view, q, tag, from, to, page, month, year, incomplete } = await searchParams
   const currentPage = parseInt(page || '1')
   const offset = (currentPage - 1) * PAGE_SIZE
   
@@ -51,6 +51,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   }
   if (from) entriesQuery = entriesQuery.gte('date', from)
   if (to) entriesQuery = entriesQuery.lte('date', to)
+  if (incomplete) entriesQuery = entriesQuery.eq('complete', false)
 
   // Run all queries in parallel for better performance
   const [entriesResult, analyticsResult, calendarResult] = await Promise.all([
@@ -218,13 +219,23 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 type="date"
                 className="w-32 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
+              <label className="flex items-center gap-2 px-3 py-2 border border-zinc-200 rounded-lg text-sm cursor-pointer hover:bg-zinc-50 transition-colors">
+                <input
+                  type="checkbox"
+                  name="incomplete"
+                  value="1"
+                  defaultChecked={!!incomplete}
+                  className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                />
+                <span className="text-zinc-600">Incomplete</span>
+              </label>
               <button
                 type="submit"
                 className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800 transition-colors"
               >
                 Filter
               </button>
-              {(q || tag || from || to) && (
+              {(q || tag || from || to || incomplete) && (
                 <Link
                   href="/entries"
                   className="px-4 py-2 border border-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors"
@@ -407,7 +418,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-6">
                 <Link
-                  href={`/entries?page=${currentPage - 1}${q ? `&q=${q}` : ''}${tag ? `&tag=${tag}` : ''}`}
+                  href={`/entries?page=${currentPage - 1}${q ? `&q=${q}` : ''}${tag ? `&tag=${tag}` : ''}${incomplete ? `&incomplete=${incomplete}` : ''}`}
                   className={`p-2 rounded-lg border border-zinc-200 transition-colors ${
                     currentPage === 1 ? 'opacity-50 pointer-events-none' : 'hover:bg-zinc-50'
                   }`}
@@ -415,13 +426,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </Link>
-                
+
                 <span className="px-4 text-sm text-zinc-500">
                   Page {currentPage} of {totalPages}
                 </span>
 
                 <Link
-                  href={`/entries?page=${currentPage + 1}${q ? `&q=${q}` : ''}${tag ? `&tag=${tag}` : ''}`}
+                  href={`/entries?page=${currentPage + 1}${q ? `&q=${q}` : ''}${tag ? `&tag=${tag}` : ''}${incomplete ? `&incomplete=${incomplete}` : ''}`}
                   className={`p-2 rounded-lg border border-zinc-200 transition-colors ${
                     currentPage === totalPages ? 'opacity-50 pointer-events-none' : 'hover:bg-zinc-50'
                   }`}
