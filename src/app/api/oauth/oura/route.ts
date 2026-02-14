@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   authUrl.searchParams.set('client_id', OURA_CLIENT_ID || '')
   authUrl.searchParams.set('redirect_uri', OURA_REDIRECT_URI)
   authUrl.searchParams.set('response_type', 'code')
+  authUrl.searchParams.set('scope', 'daily sleep heartrate')
   authUrl.searchParams.set('state', userId)
 
   return NextResponse.redirect(authUrl.toString())
