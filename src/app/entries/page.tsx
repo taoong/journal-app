@@ -1,18 +1,25 @@
 import { createServerSupabase } from '@/lib/supabase-server'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, parseISO } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns'
 import Link from 'next/link'
 import NavLink from '@/components/NavLink'
 import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
 import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
-import DateSyncRedirect from '@/components/DateSyncRedirect'
 import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 
 const PAGE_SIZE = 10
+const DEFAULT_TIMEZONE = 'America/Los_Angeles'
 
-export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string; month?: string; year?: string; incomplete?: string; clientToday?: string }> }) {
-  const { view, q, tag, from, to, page, month, year, incomplete, clientToday } = await searchParams
+// Get current date in a specific timezone
+function getTodayInTimezone(timezone: string): Date {
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('en-CA', { timeZone: timezone }) // en-CA gives YYYY-MM-DD format
+  return new Date(dateStr + 'T00:00:00')
+}
+
+export default async function EntriesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; tag?: string; from?: string; to?: string; page?: string; month?: string; year?: string; incomplete?: string }> }) {
+  const { view, q, tag, from, to, page, month, year, incomplete } = await searchParams
   const currentPage = parseInt(page || '1')
   const offset = (currentPage - 1) * PAGE_SIZE
   
@@ -20,9 +27,8 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const { data: { user } } = await supabase.auth.getUser()
 
   // Calendar month/year from URL or default to current
-  // Use clientToday from URL param if available to avoid timezone issues
-  // (server might be in different timezone than user)
-  const today = clientToday ? parseISO(clientToday) : new Date()
+  // Use Pacific time to avoid server timezone issues
+  const today = getTodayInTimezone(DEFAULT_TIMEZONE)
   const calendarYear = year ? parseInt(year) : today.getFullYear()
   const calendarMonth = month ? parseInt(month) - 1 : today.getMonth()
   const calendarDate = new Date(calendarYear, calendarMonth, 1)
@@ -170,8 +176,6 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      {/* Sync client date to URL for timezone-safe calculations */}
-      <DateSyncRedirect />
       {/* Sticky Header */}
       <div className="sticky top-0 z-10 bg-zinc-50/95 backdrop-blur-sm border-b border-zinc-200">
         <div className="max-w-5xl mx-auto py-4 px-4">
