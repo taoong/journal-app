@@ -1,5 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase-server'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameDay } from 'date-fns'
 import Link from 'next/link'
 import NavLink from '@/components/NavLink'
 import LogoutButton from '@/components/LogoutButton'
@@ -412,7 +412,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                     key={dateStr}
                     href={entryStatus ? `/entries/${dateStr}` : `/entries/new?date=${dateStr}`}
                     className={`h-10 flex items-center justify-center rounded-lg text-sm transition-colors ${bgClass} ${
-                      isToday(day) ? 'ring-2 ring-zinc-900 ring-offset-1 font-medium' : ''
+                      isSameDay(day, today) ? 'ring-2 ring-zinc-900 ring-offset-1 font-medium' : ''
                     }`}
                   >
                     {format(day, 'd')}
