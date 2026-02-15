@@ -93,6 +93,15 @@ create table oura_data (
   unique(user_id, date)
 );
 
+-- User preferences table
+create table user_preferences (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null unique,
+  timezone text default 'America/Los_Angeles',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Integrations table (OAuth tokens)
 create table integrations (
   id uuid default uuid_generate_v4() primary key,
@@ -113,6 +122,7 @@ alter table entry_tags enable row level security;
 alter table calendar_events enable row level security;
 alter table location_data enable row level security;
 alter table oura_data enable row level security;
+alter table user_preferences enable row level security;
 
 -- Entries policies
 create policy "Users can view their own entries"
@@ -203,6 +213,19 @@ create policy "Users can delete their own integrations"
   on integrations for delete
   using (auth.uid() = user_id);
 
+-- User preferences policies
+create policy "Users can view their own preferences"
+  on user_preferences for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own preferences"
+  on user_preferences for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own preferences"
+  on user_preferences for update
+  using (auth.uid() = user_id);
+
 -- Function to update updated_at timestamp
 create or replace function update_updated_at_column()
 returns trigger as $$
@@ -221,5 +244,11 @@ create trigger update_entries_updated_at
 -- Trigger for integrations updated_at
 create trigger update_integrations_updated_at
   before update on integrations
+  for each row
+  execute procedure update_updated_at_column();
+
+-- Trigger for user_preferences updated_at
+create trigger update_user_preferences_updated_at
+  before update on user_preferences
   for each row
   execute procedure update_updated_at_column();

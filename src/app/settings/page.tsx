@@ -2,21 +2,30 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import LocationImport from '@/components/LocationImport'
-import { Check, Plus, Calendar, MapPin, Activity } from 'lucide-react'
+import TimezoneSelector from '@/components/TimezoneSelector'
+import { Check, Plus, Calendar, MapPin, Activity, Globe } from 'lucide-react'
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Check integration status
-  const { data: ouraIntegration } = await supabase
-    .from('integrations')
-    .select('*')
-    .eq('user_id', user?.id)
-    .eq('provider', 'oura')
-    .single()
+  // Check integration status and user preferences
+  const [{ data: ouraIntegration }, { data: preferences }] = await Promise.all([
+    supabase
+      .from('integrations')
+      .select('*')
+      .eq('user_id', user?.id)
+      .eq('provider', 'oura')
+      .single(),
+    supabase
+      .from('user_preferences')
+      .select('timezone')
+      .eq('user_id', user?.id)
+      .single(),
+  ])
 
   const ouraConnected = !!ouraIntegration?.access_token
+  const userTimezone = preferences?.timezone || 'America/Los_Angeles'
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -31,11 +40,36 @@ export default async function SettingsPage() {
           </Link>
         </div>
 
+        {/* Preferences */}
+        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-6">
+          <div className="px-5 py-4 border-b border-zinc-100">
+            <h2 className="font-medium text-zinc-900">Preferences</h2>
+          </div>
+
+          <div className="divide-y divide-zinc-100">
+            {/* Timezone */}
+            <div className="px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Globe className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-zinc-900">Timezone</h3>
+                  <p className="text-sm text-zinc-500 mt-0.5">
+                    Used for incomplete days calculation
+                  </p>
+                </div>
+              </div>
+              <TimezoneSelector initialTimezone={userTimezone} />
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-zinc-100">
             <h2 className="font-medium text-zinc-900">Integrations</h2>
           </div>
-          
+
           <div className="divide-y divide-zinc-100">
             {/* Google Calendar */}
             <div className="px-5 py-4 flex items-center justify-between">

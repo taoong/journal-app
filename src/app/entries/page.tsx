@@ -26,9 +26,18 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Fetch user's timezone preference
+  const { data: preferences } = await supabase
+    .from('user_preferences')
+    .select('timezone')
+    .eq('user_id', user?.id)
+    .single()
+
+  const userTimezone = preferences?.timezone || DEFAULT_TIMEZONE
+
   // Calendar month/year from URL or default to current
-  // Use Pacific time to avoid server timezone issues
-  const today = getTodayInTimezone(DEFAULT_TIMEZONE)
+  // Use user's timezone to avoid server timezone issues
+  const today = getTodayInTimezone(userTimezone)
   const calendarYear = year ? parseInt(year) : today.getFullYear()
   const calendarMonth = month ? parseInt(month) - 1 : today.getMonth()
   const calendarDate = new Date(calendarYear, calendarMonth, 1)
