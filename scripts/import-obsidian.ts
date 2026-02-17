@@ -401,7 +401,7 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
           morning: entry.morning,
           afternoon: entry.afternoon,
           night: entry.night,
-          complete: true, // Mark imported entries as complete
+          complete: !!(entry.highlights_high && entry.highlights_low), // Only complete if both highs and lows filled
         }, { onConflict: 'user_id,date' })
         .select()
         .single()
