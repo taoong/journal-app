@@ -85,13 +85,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     currentPage === 1 || incomplete
       ? supabase
           .from('entries')
-          .select('date, highlights_high, highlights_low, id, p_score, l_score, weight')
+          .select('date, highlights_high, highlights_low, complete, id, p_score, l_score, weight')
           .eq('user_id', user?.id)
       : Promise.resolve({ data: null }),
-    // Calendar entries query - fetch highlights to determine completeness based on content
+    // Calendar entries query - fetch highlights and complete flag
     supabase
       .from('entries')
-      .select('date, highlights_high, highlights_low')
+      .select('date, highlights_high, highlights_low, complete')
       .eq('user_id', user?.id)
       .gte('date', format(monthStart, 'yyyy-MM-dd'))
       .lte('date', format(monthEnd, 'yyyy-MM-dd'))
@@ -109,8 +109,11 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     const startDate = new Date('2024-09-01T00:00:00')
     const todayDate = new Date(format(today, 'yyyy-MM-dd') + 'T00:00:00')
     const entryDates = new Set(allEntries.map(e => e.date))
-    // Check if entry has content (highs OR lows)
-    const hasContentMap = new Map(allEntries.map(e => [e.date, !!(e.highlights_high || e.highlights_low)]))
+    // Check if entry is complete: has content AND not explicitly marked incomplete
+    const isCompleteMap = new Map(allEntries.map(e => {
+      const hasContent = !!(e.highlights_high || e.highlights_low)
+      return [e.date, e.complete !== false && hasContent]
+    }))
     const entriesByDate = new Map(allEntries.map(e => [e.date, e]))
 
     const allIncompleteDays: typeof incompleteDays = []
@@ -119,7 +122,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       const dateStr = format(d, 'yyyy-MM-dd')
       if (!entryDates.has(dateStr)) {
         allIncompleteDays.push({ date: dateStr, type: 'missing' })
-      } else if (!hasContentMap.get(dateStr)) {
+      } else if (!isCompleteMap.get(dateStr)) {
         allIncompleteDays.push({ date: dateStr, type: 'incomplete', entry: entriesByDate.get(dateStr) })
       }
     }
@@ -145,18 +148,22 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   if (currentPage === 1 && allEntries && allEntries.length > 0) {
     const todayStr = format(today, 'yyyy-MM-dd')
 
-    // Create a set of dates with entries and a map for content status (has highs OR lows)
+    // Create a set of dates with entries and a map for completion status
     const entryDates = new Set(allEntries.map(e => e.date))
-    const hasContentMap = new Map(allEntries.map(e => [e.date, !!(e.highlights_high || e.highlights_low)]))
+    // Entry is complete if: has content AND not explicitly marked incomplete
+    const isCompleteMap = new Map(allEntries.map(e => {
+      const hasContent = !!(e.highlights_high || e.highlights_low)
+      return [e.date, e.complete !== false && hasContent]
+    }))
 
-    // Count incomplete days (no entry or entry missing both highs and lows) from Sept 1, 2024 to today
+    // Count incomplete days (no entry or entry not complete) from Sept 1, 2024 to today
     let incompleteDays = 0
     const currentDate = new Date('2024-09-01T00:00:00')
     const todayDate = new Date(todayStr + 'T00:00:00')
 
     while (currentDate <= todayDate) {
       const dateStr = format(currentDate, 'yyyy-MM-dd')
-      if (!entryDates.has(dateStr) || !hasContentMap.get(dateStr)) {
+      if (!entryDates.has(dateStr) || !isCompleteMap.get(dateStr)) {
         incompleteDays++
       }
       currentDate.setDate(currentDate.getDate() + 1)
@@ -177,10 +184,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const hasActiveFilters = !!(q || tag || from || to || incomplete)
   const effectiveView = hasActiveFilters ? 'list' : view
 
-  // Map entries by date with completion status based on content (has highs OR lows = complete)
+  // Map entries by date with completion status
+  // If complete=false explicitly, show as incomplete (user override)
+  // Otherwise, check if has content (highs OR lows)
   const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: any) => {
     const hasContent = !!(e.highlights_high || e.highlights_low)
-    acc[e.date] = hasContent ? 'complete' : 'incomplete'
+    const isComplete = e.complete !== false && hasContent
+    acc[e.date] = isComplete ? 'complete' : 'incomplete'
     return acc
   }, {} as Record<string, 'complete' | 'incomplete'>) || {}
 

@@ -265,7 +265,7 @@ export default function EntryForm({
     } finally {
       setLoading(false)
     }
-  }, [form, tags, userId, supabase, router, isNewEntry, existingEntryDate])
+  }, [form, tags, complete, userId, supabase, router, isNewEntry, existingEntryDate])
 
   const handleConfirmOverwrite = useCallback(() => {
     setShowOverwriteConfirm(false)
