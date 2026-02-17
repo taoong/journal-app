@@ -173,6 +173,10 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
   const isCurrentMonth = calendarMonth === today.getMonth() && calendarYear === today.getFullYear()
 
+  // Show list view when any filter is active
+  const hasActiveFilters = !!(q || tag || from || to || incomplete)
+  const effectiveView = hasActiveFilters ? 'list' : view
+
   // Map entries by date with completion status based on content (has highs OR lows = complete)
   const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: any) => {
     const hasContent = !!(e.highlights_high || e.highlights_low)
@@ -308,7 +312,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             <NavLink
               href="/entries?view=calendar"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view !== 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                effectiveView !== 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
               }`}
             >
               <CalendarIcon className="w-4 h-4" />
@@ -317,7 +321,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             <NavLink
               href="/entries?view=list"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view === 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                effectiveView === 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
               }`}
             >
               <List className="w-4 h-4" />
@@ -330,7 +334,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
         </div>
 
         {/* Calendar View */}
-        {view !== 'list' ? (
+        {effectiveView !== 'list' ? (
           <div className="bg-white rounded-xl border border-zinc-200 p-6">
             {/* Calendar Navigation */}
             <div className="flex items-center justify-between mb-4">
