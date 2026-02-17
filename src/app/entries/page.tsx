@@ -85,13 +85,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     currentPage === 1 || incomplete
       ? supabase
           .from('entries')
-          .select('date, complete, id, p_score, l_score, weight')
+          .select('date, highlights_high, highlights_low, id, p_score, l_score, weight')
           .eq('user_id', user?.id)
       : Promise.resolve({ data: null }),
-    // Calendar entries query
+    // Calendar entries query - fetch highlights to determine completeness based on content
     supabase
       .from('entries')
-      .select('date, complete')
+      .select('date, highlights_high, highlights_low')
       .eq('user_id', user?.id)
       .gte('date', format(monthStart, 'yyyy-MM-dd'))
       .lte('date', format(monthEnd, 'yyyy-MM-dd'))
@@ -109,7 +109,8 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
     const startDate = new Date('2024-09-01T00:00:00')
     const todayDate = new Date(format(today, 'yyyy-MM-dd') + 'T00:00:00')
     const entryDates = new Set(allEntries.map(e => e.date))
-    const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
+    // Check if entry has content (highs OR lows)
+    const hasContentMap = new Map(allEntries.map(e => [e.date, !!(e.highlights_high || e.highlights_low)]))
     const entriesByDate = new Map(allEntries.map(e => [e.date, e]))
 
     const allIncompleteDays: typeof incompleteDays = []
@@ -118,7 +119,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       const dateStr = format(d, 'yyyy-MM-dd')
       if (!entryDates.has(dateStr)) {
         allIncompleteDays.push({ date: dateStr, type: 'missing' })
-      } else if (!completionMap.get(dateStr)) {
+      } else if (!hasContentMap.get(dateStr)) {
         allIncompleteDays.push({ date: dateStr, type: 'incomplete', entry: entriesByDate.get(dateStr) })
       }
     }
@@ -144,18 +145,18 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   if (currentPage === 1 && allEntries && allEntries.length > 0) {
     const todayStr = format(today, 'yyyy-MM-dd')
 
-    // Create a set of dates with entries and a map for completion status
+    // Create a set of dates with entries and a map for content status (has highs OR lows)
     const entryDates = new Set(allEntries.map(e => e.date))
-    const completionMap = new Map(allEntries.map(e => [e.date, e.complete]))
+    const hasContentMap = new Map(allEntries.map(e => [e.date, !!(e.highlights_high || e.highlights_low)]))
 
-    // Count incomplete days (no entry or entry not marked complete) from Sept 1, 2024 to today
+    // Count incomplete days (no entry or entry missing both highs and lows) from Sept 1, 2024 to today
     let incompleteDays = 0
     const currentDate = new Date('2024-09-01T00:00:00')
     const todayDate = new Date(todayStr + 'T00:00:00')
 
     while (currentDate <= todayDate) {
       const dateStr = format(currentDate, 'yyyy-MM-dd')
-      if (!entryDates.has(dateStr) || !completionMap.get(dateStr)) {
+      if (!entryDates.has(dateStr) || !hasContentMap.get(dateStr)) {
         incompleteDays++
       }
       currentDate.setDate(currentDate.getDate() + 1)
@@ -172,9 +173,10 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
   const isCurrentMonth = calendarMonth === today.getMonth() && calendarYear === today.getFullYear()
 
-  // Map entries by date with completion status: 'complete' | 'incomplete' | undefined
+  // Map entries by date with completion status based on content (has highs OR lows = complete)
   const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: any) => {
-    acc[e.date] = e.complete ? 'complete' : 'incomplete'
+    const hasContent = !!(e.highlights_high || e.highlights_low)
+    acc[e.date] = hasContent ? 'complete' : 'incomplete'
     return acc
   }, {} as Record<string, 'complete' | 'incomplete'>) || {}
 
