@@ -306,7 +306,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             <NavLink
               href="/entries?view=calendar"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view === 'calendar' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                view !== 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
               }`}
             >
               <CalendarIcon className="w-4 h-4" />
@@ -315,7 +315,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
             <NavLink
               href="/entries?view=list"
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view !== 'calendar' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                view === 'list' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
               }`}
             >
               <List className="w-4 h-4" />
@@ -328,7 +328,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
         </div>
 
         {/* Calendar View */}
-        {view === 'calendar' ? (
+        {view !== 'list' ? (
           <div className="bg-white rounded-xl border border-zinc-200 p-6">
             {/* Calendar Navigation */}
             <div className="flex items-center justify-between mb-4">
