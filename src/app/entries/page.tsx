@@ -242,7 +242,10 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-zinc-200 p-4">
+            <Link
+              href="/entries?incomplete=1"
+              className="bg-white rounded-xl border border-zinc-200 p-4 hover:border-zinc-300 hover:shadow-sm transition-all cursor-pointer"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -252,7 +255,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                   <p className="text-sm text-zinc-500">Incomplete Days</p>
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
         )}
 
