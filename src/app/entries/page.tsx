@@ -242,7 +242,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 </div>
               </div>
             </div>
-            <Link
+            <NavLink
               href="/entries?incomplete=1"
               className="bg-white rounded-xl border border-zinc-200 p-4 hover:border-zinc-300 hover:shadow-sm transition-all cursor-pointer"
             >
@@ -255,7 +255,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                   <p className="text-sm text-zinc-500">Incomplete Days</p>
                 </div>
               </div>
-            </Link>
+            </NavLink>
           </div>
         )}
 
