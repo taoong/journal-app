@@ -202,12 +202,12 @@ function parseMarkdownSections(markdown: string): {
 } {
   const lines = markdown.split('\n')
 
-  let highlights_high: string[] = []
-  let highlights_low: string[] = []
-  let more: string[] = []
-  let morning: string[] = []
-  let afternoon: string[] = []
-  let night: string[] = []
+  const highlights_high: string[] = []
+  const highlights_low: string[] = []
+  const more: string[] = []
+  const morning: string[] = []
+  const afternoon: string[] = []
+  const night: string[] = []
 
   let currentSection: 'none' | 'highs' | 'lows' | 'more' | 'morning' | 'afternoon' | 'night' = 'none'
 
@@ -338,7 +338,7 @@ function cleanSection(lines: string[]): string | null {
  */
 async function importEntries(entries: ParsedEntry[]): Promise<void> {
   let imported = 0
-  let skipped = 0
+  const skipped = 0
   let errors = 0
 
   // First, fetch or create all tags

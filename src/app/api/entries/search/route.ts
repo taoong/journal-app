@@ -1,18 +1,29 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { searchParamsSchema, escapeSearchQuery } from '@/lib/validation'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const query = searchParams.get('q')
-  const tag = searchParams.get('tag')
-  const minPScore = searchParams.get('minP')
-  const maxPScore = searchParams.get('maxP')
-  const minLScore = searchParams.get('minL')
-  const maxLScore = searchParams.get('maxL')
-  const fromDate = searchParams.get('from')
-  const toDate = searchParams.get('to')
-  const limit = parseInt(searchParams.get('limit') || '50')
-  const offset = parseInt(searchParams.get('offset') || '0')
+
+  // Validate and parse search params
+  const parsed = searchParamsSchema.safeParse({
+    q: searchParams.get('q') || undefined,
+    tag: searchParams.get('tag') || undefined,
+    minP: searchParams.get('minP') || undefined,
+    maxP: searchParams.get('maxP') || undefined,
+    minL: searchParams.get('minL') || undefined,
+    maxL: searchParams.get('maxL') || undefined,
+    from: searchParams.get('from') || undefined,
+    to: searchParams.get('to') || undefined,
+    limit: searchParams.get('limit') || undefined,
+    offset: searchParams.get('offset') || undefined,
+  })
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid parameters', details: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const { q: query, tag, minP: minPScore, maxP: maxPScore, minL: minLScore, maxL: maxLScore, from: fromDate, to: toDate, limit, offset } = parsed.data
 
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,13 +47,8 @@ export async function GET(request: Request) {
 
   // Text search across content fields
   if (query) {
-    const searchCondition = `
-      highlights_high.ilike.%${query}%,
-      highlights_low.ilike.%${query}%,
-      morning.ilike.%${query}%,
-      afternoon.ilike.%${query}%,
-      night.ilike.%${query}%
-    `
+    const escapedQuery = escapeSearchQuery(query)
+    const searchCondition = `highlights_high.ilike.%${escapedQuery}%,highlights_low.ilike.%${escapedQuery}%,morning.ilike.%${escapedQuery}%,afternoon.ilike.%${escapedQuery}%,night.ilike.%${escapedQuery}%`
     queryBuilder = queryBuilder.or(searchCondition)
   }
 
@@ -51,11 +57,11 @@ export async function GET(request: Request) {
     queryBuilder = queryBuilder.eq('entry_tags.tags.name', tag)
   }
 
-  // Score range filters
-  if (minPScore) queryBuilder = queryBuilder.gte('p_score', parseInt(minPScore))
-  if (maxPScore) queryBuilder = queryBuilder.lte('p_score', parseInt(maxPScore))
-  if (minLScore) queryBuilder = queryBuilder.gte('l_score', parseInt(minLScore))
-  if (maxLScore) queryBuilder = queryBuilder.lte('l_score', parseInt(maxLScore))
+  // Score range filters (values already coerced to numbers by Zod)
+  if (minPScore) queryBuilder = queryBuilder.gte('p_score', minPScore)
+  if (maxPScore) queryBuilder = queryBuilder.lte('p_score', maxPScore)
+  if (minLScore) queryBuilder = queryBuilder.gte('l_score', minLScore)
+  if (maxLScore) queryBuilder = queryBuilder.lte('l_score', maxLScore)
 
   // Date range filters
   if (fromDate) queryBuilder = queryBuilder.gte('date', fromDate)

@@ -7,9 +7,10 @@ import EntryCard from '@/components/EntryCard'
 import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
 import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
-
-const PAGE_SIZE = 10
-const DEFAULT_TIMEZONE = 'America/Los_Angeles'
+import { escapeSearchQuery } from '@/lib/validation'
+import { PAGE_SIZE, DEFAULT_TIMEZONE } from '@/lib/constants'
+import { calculateIncompleteDays, countIncompleteDays, isEntryComplete } from '@/lib/incomplete-days'
+import type { IncompleteDayItem, Analytics, EntryListItem, CalendarEntry } from '@/types/entry'
 
 // Get current date in a specific timezone
 function getTodayInTimezone(timezone: string): Date {
@@ -63,7 +64,8 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
   // Apply filters (but NOT incomplete - we handle that separately)
   if (q) {
-    entriesQuery = entriesQuery.or(`highlights_high.ilike.%${q}%,highlights_low.ilike.%${q}%,morning.ilike.%${q}%,afternoon.ilike.%${q}%,night.ilike.%${q}%`)
+    const escapedQ = escapeSearchQuery(q)
+    entriesQuery = entriesQuery.or(`highlights_high.ilike.%${escapedQ}%,highlights_low.ilike.%${escapedQ}%,morning.ilike.%${escapedQ}%,afternoon.ilike.%${escapedQ}%,night.ilike.%${escapedQ}%`)
   }
   if (tag) {
     entriesQuery = entriesQuery.eq('entry_tags.tags.name', tag)
@@ -102,74 +104,31 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const { data: calendarEntries } = calendarResult
 
   // Build incomplete days list when incomplete filter is active
-  let incompleteDays: Array<{ date: string; type: 'missing' | 'incomplete'; entry?: any }> = []
+  let incompleteDaysList: IncompleteDayItem[] = []
   let incompleteTotalCount = 0
 
   if (incomplete && allEntries) {
-    const startDate = new Date('2024-09-01T00:00:00')
-    const todayDate = new Date(format(today, 'yyyy-MM-dd') + 'T00:00:00')
-    const entryDates = new Set(allEntries.map(e => e.date))
-    // Check if entry is complete: has content AND not explicitly marked incomplete
-    const isCompleteMap = new Map(allEntries.map(e => {
-      const hasContent = !!(e.highlights_high || e.highlights_low)
-      return [e.date, e.complete !== false && hasContent]
-    }))
-    const entriesByDate = new Map(allEntries.map(e => [e.date, e]))
-
-    const allIncompleteDays: typeof incompleteDays = []
-
-    for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = format(d, 'yyyy-MM-dd')
-      if (!entryDates.has(dateStr)) {
-        allIncompleteDays.push({ date: dateStr, type: 'missing' })
-      } else if (!isCompleteMap.get(dateStr)) {
-        allIncompleteDays.push({ date: dateStr, type: 'incomplete', entry: entriesByDate.get(dateStr) })
-      }
-    }
-
-    // Sort descending (most recent first)
-    allIncompleteDays.sort((a, b) => b.date.localeCompare(a.date))
+    const todayStr = format(today, 'yyyy-MM-dd')
+    const allIncompleteDays = calculateIncompleteDays(allEntries, todayStr)
     incompleteTotalCount = allIncompleteDays.length
-
     // Paginate
-    incompleteDays = allIncompleteDays.slice(offset, offset + PAGE_SIZE)
+    incompleteDaysList = allIncompleteDays.slice(offset, offset + PAGE_SIZE)
   }
 
   const totalCount = incomplete ? incompleteTotalCount : (count || 0)
 
   // Derive everything from entries query
-  const entries = entriesData?.map((e: any) => ({
+  const entries: EntryListItem[] = entriesData?.map((e: any) => ({
     ...e,
-    entry_tags: e.entry_tags?.map((et: any) => ({ tags: et.tags }))
+    entry_tags: e.entry_tags?.map((et: { tags: { name: string } }) => ({ tags: et.tags }))
   })) || []
 
   // Calculate analytics
-  let analytics: any = null
+  let analytics: Analytics | null = null
   if (currentPage === 1 && allEntries && allEntries.length > 0) {
     const todayStr = format(today, 'yyyy-MM-dd')
-
-    // Create a set of dates with entries and a map for completion status
-    const entryDates = new Set(allEntries.map(e => e.date))
-    // Entry is complete if: has content AND not explicitly marked incomplete
-    const isCompleteMap = new Map(allEntries.map(e => {
-      const hasContent = !!(e.highlights_high || e.highlights_low)
-      return [e.date, e.complete !== false && hasContent]
-    }))
-
-    // Count incomplete days (no entry or entry not complete) from Sept 1, 2024 to today
-    let incompleteDays = 0
-    const currentDate = new Date('2024-09-01T00:00:00')
-    const todayDate = new Date(todayStr + 'T00:00:00')
-
-    while (currentDate <= todayDate) {
-      const dateStr = format(currentDate, 'yyyy-MM-dd')
-      if (!entryDates.has(dateStr) || !isCompleteMap.get(dateStr)) {
-        incompleteDays++
-      }
-      currentDate.setDate(currentDate.getDate() + 1)
-    }
-
-    analytics = { totalEntries: allEntries.length, incompleteDays }
+    const incompleteDaysCount = countIncompleteDays(allEntries, todayStr)
+    analytics = { totalEntries: allEntries.length, incompleteDays: incompleteDaysCount }
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -187,16 +146,14 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   // Map entries by date with completion status
   // If complete=false explicitly, show as incomplete (user override)
   // Otherwise, check if has content (highs OR lows)
-  const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: any) => {
-    const hasContent = !!(e.highlights_high || e.highlights_low)
-    const isComplete = e.complete !== false && hasContent
-    acc[e.date] = isComplete ? 'complete' : 'incomplete'
+  const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: CalendarEntry) => {
+    acc[e.date] = isEntryComplete(e) ? 'complete' : 'incomplete'
     return acc
   }, {} as Record<string, 'complete' | 'incomplete'>) || {}
 
   // Find first entry date for determining "missing" days
   const firstEntryDate = calendarEntries && calendarEntries.length > 0
-    ? calendarEntries.map(e => e.date).sort()[0]
+    ? calendarEntries.map((e: CalendarEntry) => e.date).sort()[0]
     : null
 
   return (
@@ -464,19 +421,19 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
           <div className="space-y-2">
             {incomplete ? (
               // Render incomplete days (missing + incomplete entries)
-              incompleteDays.map((day) =>
+              incompleteDaysList.map((day) =>
                 day.type === 'missing' ? (
                   <MissingDayCard key={day.date} date={day.date} />
-                ) : (
+                ) : day.entry ? (
                   <EntryCard key={day.date} entry={day.entry} tags={[]} />
-                )
+                ) : null
               )
             ) : (
               // Render regular entries
-              entries.map((entry: any) => {
+              entries.map((entry) => {
                 const tags = entry.entry_tags
-                  ?.map((et: any) => et.tags?.name)
-                  .filter((name: unknown): name is string => typeof name === 'string') || []
+                  ?.map((et) => et.tags?.name)
+                  .filter((name): name is string => typeof name === 'string') || []
 
                 return (
                   <EntryCard key={entry.id} entry={entry} tags={tags} />
@@ -484,7 +441,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               })
             )}
 
-            {((incomplete && incompleteDays.length === 0) || (!incomplete && entries.length === 0)) && (
+            {((incomplete && incompleteDaysList.length === 0) || (!incomplete && entries.length === 0)) && (
               <div className="text-center py-16">
                 <p className="text-zinc-500 mb-4">No entries found</p>
                 <Link

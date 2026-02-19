@@ -1,9 +1,17 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { calendarParamsSchema } from '@/lib/validation'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const date = searchParams.get('date')
+  const dateParam = searchParams.get('date')
+
+  // Validate date parameter
+  const parsed = calendarParamsSchema.safeParse({ date: dateParam })
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 })
+  }
+  const { date } = parsed.data
 
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -39,9 +47,9 @@ export async function GET(request: Request) {
   }
 
   // Fetch from Google Calendar API
-  const startOfDay = new Date(date!)
+  const startOfDay = new Date(date)
   startOfDay.setHours(0, 0, 0, 0)
-  const endOfDay = new Date(date!)
+  const endOfDay = new Date(date)
   endOfDay.setHours(23, 59, 59, 999)
 
   try {

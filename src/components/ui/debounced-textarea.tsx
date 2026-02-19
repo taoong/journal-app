@@ -1,7 +1,8 @@
 'use client'
 
-import { memo, useState, useEffect, useCallback, useRef } from 'react'
+import { memo } from 'react'
 import { Textarea } from './textarea'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 
 interface DebouncedTextareaProps {
   value: string
@@ -18,53 +19,17 @@ export const DebouncedTextarea = memo(function DebouncedTextarea({
   delay = 300,
   ...props
 }: DebouncedTextareaProps) {
-  const [localValue, setLocalValue] = useState(externalValue)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const isTypingRef = useRef(false)
-  const onChangeRef = useRef(onChange)
-
-  // Keep onChange ref updated
-  useEffect(() => {
-    onChangeRef.current = onChange
-  }, [onChange])
-
-  // Sync external value when not typing
-  useEffect(() => {
-    if (!isTypingRef.current) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Necessary for debounced input sync
-      setLocalValue(externalValue)
-    }
-  }, [externalValue])
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value
-    setLocalValue(newValue)
-    isTypingRef.current = true
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-
-    timeoutRef.current = setTimeout(() => {
-      onChangeRef.current(newValue)
-      isTypingRef.current = false
-    }, delay)
-  }, [delay])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [])
+  const { localValue, handleChange } = useDebouncedValue(
+    externalValue,
+    onChange,
+    { delay }
+  )
 
   return (
     <Textarea
       {...props}
       value={localValue}
-      onChange={handleChange}
+      onChange={(e) => handleChange(e.target.value)}
     />
   )
 })
