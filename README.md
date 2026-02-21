@@ -2,6 +2,10 @@
 
 A personal journaling app with daily entries, P/L scoring, tag organization, and integrations with Google Calendar, location history, and health tracking.
 
+## Documentation
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Comprehensive technical reference: directory structure, data models, database schema, auth flow, all pages/routes, integrations, and key patterns. Keep it updated when making significant changes to the stack, schema, or structure.
+
 ## Features
 
 ### Core Journaling

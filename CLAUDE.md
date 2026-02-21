@@ -67,6 +67,19 @@ Main tables: `entries`, `tags`, `entry_tags` (junction), `calendar_events`
 
 All tables use RLS policies enforcing user data isolation. P/L scores validated as 1-10 in database.
 
+## Architecture Reference
+
+A comprehensive architecture snapshot is maintained in `ARCHITECTURE.md` at the project root. Read it at the start of any session involving significant changes to get fast context on the full system.
+
+**Keep `ARCHITECTURE.md` updated** whenever you make changes that affect any of the following:
+- Pages or API routes (added, removed, or renamed)
+- Database schema (new tables, columns, constraints, RLS policies)
+- New integrations or external services
+- New architectural patterns, state management approaches, or data flow changes
+- Component responsibilities that change significantly
+- New environment variables
+- Major refactors
+
 ## Workflow Preferences
 
 - When fixing bugs or making changes, automatically commit and push if the build passes and everything looks good. No need to ask for confirmation.
