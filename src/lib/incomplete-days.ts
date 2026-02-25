@@ -43,7 +43,8 @@ export function calculateIncompleteDays(
   for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
     const dateStr = format(d, 'yyyy-MM-dd')
     if (!entryDates.has(dateStr)) {
-      incompleteDays.push({ date: dateStr, type: dateStr === todayStr ? 'incomplete' : 'missing' })
+      if (dateStr === todayStr) continue // today without an entry is not yet overdue
+      incompleteDays.push({ date: dateStr, type: 'missing' })
     } else if (!isCompleteMap.get(dateStr)) {
       const entry = entriesByDate.get(dateStr)
       incompleteDays.push({
@@ -85,6 +86,7 @@ export function countIncompleteDays(
   let count = 0
   for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
     const dateStr = format(d, 'yyyy-MM-dd')
+    if (dateStr === todayStr && !entryDates.has(dateStr)) continue // today without an entry is not yet overdue
     if (!entryDates.has(dateStr) || !isCompleteMap.get(dateStr)) {
       count++
     }

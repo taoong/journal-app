@@ -370,14 +370,15 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 const dateStr = format(day, 'yyyy-MM-dd')
                 const entryStatus = entriesByDate[dateStr]
                 const isFutureDay = day > today
+                const isToday = dateStr === format(today, 'yyyy-MM-dd')
                 const isBeforeFirstEntry = firstEntryDate && dateStr < firstEntryDate
-                const isMissingDay = !entryStatus && !isFutureDay && !isBeforeFirstEntry && firstEntryDate
+                const isMissingDay = !entryStatus && !isFutureDay && !isToday && !isBeforeFirstEntry && firstEntryDate
 
                 // Determine background color based on state
                 let bgClass = 'text-zinc-600 hover:bg-zinc-50' // default: future or before first entry
                 if (entryStatus === 'complete') {
                   bgClass = 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
-                } else if (entryStatus === 'incomplete') {
+                } else if (entryStatus === 'incomplete' || (isToday && !entryStatus)) {
                   bgClass = 'bg-amber-100 text-amber-900 hover:bg-amber-200'
                 } else if (isMissingDay) {
                   bgClass = 'bg-red-100 text-red-900 hover:bg-red-200'
