@@ -130,6 +130,17 @@ export default function EntryForm({
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="more">More</Label>
+        <DebouncedTextarea
+          id="more"
+          placeholder="Anything else on your mind?"
+          value={form.more}
+          onChange={fieldHandlers.more}
+          rows={5}
+        />
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="morning">Morning</Label>
         <DebouncedTextarea
           id="morning"
@@ -158,17 +169,6 @@ export default function EntryForm({
           placeholder="How was your evening?"
           value={form.night}
           onChange={fieldHandlers.night}
-          rows={5}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="more">More</Label>
-        <DebouncedTextarea
-          id="more"
-          placeholder="Anything else on your mind?"
-          value={form.more}
-          onChange={fieldHandlers.more}
           rows={5}
         />
       </div>
