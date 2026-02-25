@@ -9,7 +9,7 @@ import EntriesContent from '@/components/EntriesContent'
 import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 import { escapeSearchQuery } from '@/lib/validation'
 import { PAGE_SIZE, DEFAULT_TIMEZONE } from '@/lib/constants'
-import { calculateIncompleteDays, countIncompleteDays, isEntryComplete } from '@/lib/incomplete-days'
+import { calculateIncompleteDays, countIncompleteDays, getDayStatus } from '@/lib/incomplete-days'
 import type { IncompleteDayItem, Analytics, EntryListItem, CalendarEntry } from '@/types/entry'
 
 // Get current date in a specific timezone
@@ -143,15 +143,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   const hasActiveFilters = !!(q || tag || from || to || incomplete)
   const effectiveView = hasActiveFilters ? 'list' : view
 
-  // Map entries by date with completion status
-  // If complete=false explicitly, show as incomplete (user override)
-  // Otherwise, check if has content (highs OR lows)
-  const entriesByDate = calendarEntries?.reduce((acc: Record<string, 'complete' | 'incomplete'>, e: CalendarEntry) => {
-    acc[e.date] = isEntryComplete(e) ? 'complete' : 'incomplete'
+  // Map entries by date for calendar status lookup
+  const entriesByDate = calendarEntries?.reduce((acc: Record<string, CalendarEntry>, e: CalendarEntry) => {
+    acc[e.date] = e
     return acc
-  }, {} as Record<string, 'complete' | 'incomplete'>) || {}
+  }, {} as Record<string, CalendarEntry>) || {}
 
-  // Find first entry date for determining "missing" days
+  // Find first entry date for determining "missing" days in calendar
   const firstEntryDate = calendarEntries && calendarEntries.length > 0
     ? calendarEntries.map((e: CalendarEntry) => e.date).sort()[0]
     : null
@@ -368,26 +366,19 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               ))}
               {calendarDays.map((day) => {
                 const dateStr = format(day, 'yyyy-MM-dd')
-                const entryStatus = entriesByDate[dateStr]
-                const isFutureDay = day > today
-                const isToday = dateStr === format(today, 'yyyy-MM-dd')
-                const isBeforeFirstEntry = firstEntryDate && dateStr < firstEntryDate
-                const isMissingDay = !entryStatus && !isFutureDay && !isToday && !isBeforeFirstEntry && firstEntryDate
+                const todayStr = format(today, 'yyyy-MM-dd')
+                const status = getDayStatus(dateStr, todayStr, entriesByDate[dateStr], firstEntryDate ?? dateStr)
 
-                // Determine background color based on state
-                let bgClass = 'text-zinc-600 hover:bg-zinc-50' // default: future or before first entry
-                if (entryStatus === 'complete') {
-                  bgClass = 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
-                } else if (entryStatus === 'incomplete' || (isToday && !entryStatus)) {
-                  bgClass = 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-                } else if (isMissingDay) {
-                  bgClass = 'bg-red-100 text-red-900 hover:bg-red-200'
-                }
+                const bgClass =
+                  status === 'complete'   ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200' :
+                  status === 'incomplete' ? 'bg-amber-100 text-amber-900 hover:bg-amber-200' :
+                  status === 'missing'    ? 'bg-red-100 text-red-900 hover:bg-red-200' :
+                  'text-zinc-600 hover:bg-zinc-50' // future / none
 
                 return (
                   <Link
                     key={dateStr}
-                    href={entryStatus ? `/entries/${dateStr}` : `/entries/new?date=${dateStr}`}
+                    href={entriesByDate[dateStr] ? `/entries/${dateStr}` : `/entries/new?date=${dateStr}`}
                     className={`h-10 flex items-center justify-center rounded-lg text-sm transition-colors ${bgClass} ${
                       isSameDay(day, today) ? 'ring-2 ring-zinc-900 ring-offset-1 font-medium' : ''
                     }`}

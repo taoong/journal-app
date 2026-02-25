@@ -12,19 +12,37 @@ interface EntryData {
   l_score?: number | null
 }
 
+export type DayStatus = 'complete' | 'incomplete' | 'missing' | 'future' | 'none'
+
 /**
- * Checks if an entry is considered complete based on content and explicit flag.
- * Entries before 2025 are always treated as complete.
+ * Single source of truth for the status of any given day.
+ *
+ * Rules (in priority order):
+ *  1. Future dates            → 'future'
+ *  2. Before firstEntryDate   → 'none'    (no journal history yet)
+ *  3. Pre-2025 entries        → 'complete' (won't be updated)
+ *  4. Today with no entry     → 'incomplete' (still time to write)
+ *  5. Past date with no entry → 'missing'
+ *  6. Entry exists            → 'complete' or 'incomplete' based on content/flag
  */
-export function isEntryComplete(entry: Pick<EntryData, 'date' | 'highlights_high' | 'highlights_low' | 'complete'>): boolean {
-  if (entry.date < '2025-01-01') return true
+export function getDayStatus(
+  dateStr: string,
+  todayStr: string,
+  entry: Pick<EntryData, 'date' | 'highlights_high' | 'highlights_low' | 'complete'> | undefined,
+  firstEntryDate: string
+): DayStatus {
+  if (dateStr > todayStr) return 'future'
+  if (dateStr < firstEntryDate) return 'none'
+  if (dateStr < '2025-01-01') return 'complete'
+  if (!entry) return dateStr === todayStr ? 'incomplete' : 'missing'
   const hasContent = !!(entry.highlights_high || entry.highlights_low)
-  return entry.complete !== false && hasContent
+  return entry.complete !== false && hasContent ? 'complete' : 'incomplete'
 }
 
 /**
  * Calculate all incomplete days between the journal start date and today.
  * Returns an array sorted descending (most recent first).
+ * Today with no entry is excluded — it's not overdue yet.
  */
 export function calculateIncompleteDays(
   allEntries: EntryData[],
@@ -32,45 +50,40 @@ export function calculateIncompleteDays(
 ): IncompleteDayItem[] {
   const startDate = new Date(JOURNAL_START_DATE + 'T00:00:00')
   const todayDate = new Date(todayStr + 'T00:00:00')
-  const entryDates = new Set(allEntries.map((e) => e.date))
-  const isCompleteMap = new Map(
-    allEntries.map((e) => [e.date, isEntryComplete(e)])
-  )
   const entriesByDate = new Map(allEntries.map((e) => [e.date, e]))
 
   const incompleteDays: IncompleteDayItem[] = []
 
   for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
     const dateStr = format(d, 'yyyy-MM-dd')
-    if (!entryDates.has(dateStr)) {
-      if (dateStr === todayStr) continue // today without an entry is not yet overdue
+    const entry = entriesByDate.get(dateStr)
+    const status = getDayStatus(dateStr, todayStr, entry, JOURNAL_START_DATE)
+
+    if (status === 'missing') {
       incompleteDays.push({ date: dateStr, type: 'missing' })
-    } else if (!isCompleteMap.get(dateStr)) {
-      const entry = entriesByDate.get(dateStr)
+    } else if (status === 'incomplete' && entry) {
       incompleteDays.push({
         date: dateStr,
         type: 'incomplete',
-        entry: entry
-          ? {
-              id: entry.id!,
-              date: entry.date,
-              p_score: entry.p_score ?? null,
-              l_score: entry.l_score ?? null,
-              highlights_high: entry.highlights_high,
-              highlights_low: entry.highlights_low,
-            }
-          : undefined,
+        entry: {
+          id: entry.id!,
+          date: entry.date,
+          p_score: entry.p_score ?? null,
+          l_score: entry.l_score ?? null,
+          highlights_high: entry.highlights_high,
+          highlights_low: entry.highlights_low,
+        },
       })
     }
   }
 
-  // Sort descending (most recent first)
   incompleteDays.sort((a, b) => b.date.localeCompare(a.date))
   return incompleteDays
 }
 
 /**
- * Count the number of incomplete days between journal start and today
+ * Count incomplete days between journal start and today.
+ * Today with no entry is excluded — it's not overdue yet.
  */
 export function countIncompleteDays(
   allEntries: EntryData[],
@@ -78,18 +91,14 @@ export function countIncompleteDays(
 ): number {
   const startDate = new Date(JOURNAL_START_DATE + 'T00:00:00')
   const todayDate = new Date(todayStr + 'T00:00:00')
-  const entryDates = new Set(allEntries.map((e) => e.date))
-  const isCompleteMap = new Map(
-    allEntries.map((e) => [e.date, isEntryComplete(e)])
-  )
+  const entriesByDate = new Map(allEntries.map((e) => [e.date, e]))
 
   let count = 0
   for (let d = new Date(startDate); d <= todayDate; d.setDate(d.getDate() + 1)) {
     const dateStr = format(d, 'yyyy-MM-dd')
-    if (dateStr === todayStr && !entryDates.has(dateStr)) continue // today without an entry is not yet overdue
-    if (!entryDates.has(dateStr) || !isCompleteMap.get(dateStr)) {
-      count++
-    }
+    const entry = entriesByDate.get(dateStr)
+    const status = getDayStatus(dateStr, todayStr, entry, JOURNAL_START_DATE)
+    if (status === 'missing' || (status === 'incomplete' && entry)) count++
   }
   return count
 }
