@@ -31,6 +31,7 @@ export function useEntryForm({
     morning: entry?.morning || '',
     afternoon: entry?.afternoon || '',
     night: entry?.night || '',
+    more: entry?.more || '',
     pScore: entry?.p_score ?? 5,
     lScore: entry?.l_score ?? 5,
     weight: entry?.weight?.toString() || '',
@@ -90,6 +91,7 @@ export function useEntryForm({
       morning: (value: string) => updateField('morning', value),
       afternoon: (value: string) => updateField('afternoon', value),
       night: (value: string) => updateField('night', value),
+      more: (value: string) => updateField('more', value),
       weight: (value: string) => updateField('weight', value),
     }),
     [updateField]
@@ -164,6 +166,7 @@ export function useEntryForm({
           morning: form.morning || null,
           afternoon: form.afternoon || null,
           night: form.night || null,
+          more: form.more || null,
           p_score: form.pScore,
           l_score: form.lScore,
           weight: form.weight ? parseFloat(form.weight) : null,

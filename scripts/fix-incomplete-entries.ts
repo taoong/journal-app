@@ -9,7 +9,7 @@ async function fixIncompleteEntries() {
   // Fetch all incomplete entries
   const { data: entries, error } = await supabase
     .from('entries')
-    .select('id, date, morning, afternoon, night, highlights_high, highlights_low')
+    .select('id, date, morning, afternoon, night, more, highlights_high, highlights_low')
     .eq('complete', false)
 
   if (error) {
@@ -24,6 +24,7 @@ async function fixIncompleteEntries() {
     entry.morning?.trim() ||
     entry.afternoon?.trim() ||
     entry.night?.trim() ||
+    entry.more?.trim() ||
     entry.highlights_high?.trim() ||
     entry.highlights_low?.trim()
   )

@@ -18,6 +18,7 @@ export interface Entry {
   morning?: string
   afternoon?: string
   night?: string
+  more?: string
   p_score?: number
   l_score?: number
   weight?: number
@@ -31,6 +32,7 @@ export interface FormState {
   morning: string
   afternoon: string
   night: string
+  more: string
   pScore: number
   lScore: number
   weight: string

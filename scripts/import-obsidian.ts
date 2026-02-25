@@ -68,6 +68,7 @@ interface ParsedEntry {
   morning: string | null
   afternoon: string | null
   night: string | null
+  more: string | null
 }
 
 /**
@@ -177,6 +178,7 @@ function parseJournalFile(filePath: string): ParsedEntry | null {
     morning: sections.morning,
     afternoon: sections.afternoon,
     night: sections.night,
+    more: sections.more,
   }
 }
 
@@ -196,6 +198,7 @@ function parseRating(value: unknown): number | null {
 function parseMarkdownSections(markdown: string): {
   highlights_high: string | null
   highlights_low: string | null
+  more: string | null
   morning: string | null
   afternoon: string | null
   night: string | null
@@ -280,15 +283,10 @@ function parseMarkdownSections(markdown: string): {
     }
   }
 
-  // Combine highlights_high with "more" section
-  const combined_high = [...highlights_high]
-  if (more.length > 0 && more.some(l => l.trim())) {
-    combined_high.push('', '---', '', ...more)
-  }
-
   return {
-    highlights_high: cleanSection(combined_high),
+    highlights_high: cleanSection(highlights_high),
     highlights_low: cleanSection(highlights_low),
+    more: cleanSection(more),
     morning: cleanSection(morning),
     afternoon: cleanSection(afternoon),
     night: cleanSection(night),
@@ -401,6 +399,7 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
           morning: entry.morning,
           afternoon: entry.afternoon,
           night: entry.night,
+          more: entry.more,
           complete: !!(entry.highlights_high || entry.highlights_low), // Incomplete only if missing both highs and lows
         }, { onConflict: 'user_id,date' })
         .select()

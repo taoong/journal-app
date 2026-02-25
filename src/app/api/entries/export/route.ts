@@ -11,6 +11,7 @@ interface EntryWithTags {
   morning?: string | null
   afternoon?: string | null
   night?: string | null
+  more?: string | null
   created_at: string
   entry_tags?: Array<{ tags?: { name: string } | null }>
 }
@@ -54,6 +55,7 @@ export async function GET() {
     'Morning',
     'Afternoon',
     'Night',
+    'More',
     'Created At'
   ]
 
@@ -74,6 +76,7 @@ export async function GET() {
       `"${(entry.morning || '').replace(/"/g, '""')}"`,
       `"${(entry.afternoon || '').replace(/"/g, '""')}"`,
       `"${(entry.night || '').replace(/"/g, '""')}"`,
+      `"${(entry.more || '').replace(/"/g, '""')}"`,
       entry.created_at
     ]
   })

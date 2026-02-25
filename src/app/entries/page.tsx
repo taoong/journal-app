@@ -65,7 +65,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   // Apply filters (but NOT incomplete - we handle that separately)
   if (q) {
     const escapedQ = escapeSearchQuery(q)
-    entriesQuery = entriesQuery.or(`highlights_high.ilike.%${escapedQ}%,highlights_low.ilike.%${escapedQ}%,morning.ilike.%${escapedQ}%,afternoon.ilike.%${escapedQ}%,night.ilike.%${escapedQ}%`)
+    entriesQuery = entriesQuery.or(`highlights_high.ilike.%${escapedQ}%,highlights_low.ilike.%${escapedQ}%,morning.ilike.%${escapedQ}%,afternoon.ilike.%${escapedQ}%,night.ilike.%${escapedQ}%,more.ilike.%${escapedQ}%`)
   }
   if (tag) {
     entriesQuery = entriesQuery.eq('entry_tags.tags.name', tag)

@@ -162,6 +162,17 @@ export default function EntryForm({
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="more">More</Label>
+        <DebouncedTextarea
+          id="more"
+          placeholder="Anything else on your mind?"
+          value={form.more}
+          onChange={fieldHandlers.more}
+          rows={5}
+        />
+      </div>
+
       {/* Score Sliders and Weight */}
       <ScoreSliders
         localPScore={localPScore}

@@ -10,6 +10,7 @@ export interface Entry {
   morning: string | null
   afternoon: string | null
   night: string | null
+  more: string | null
   complete: boolean
   created_at: string
   updated_at: string

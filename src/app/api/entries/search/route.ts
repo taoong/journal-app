@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   // Text search across content fields
   if (query) {
     const escapedQuery = escapeSearchQuery(query)
-    const searchCondition = `highlights_high.ilike.%${escapedQuery}%,highlights_low.ilike.%${escapedQuery}%,morning.ilike.%${escapedQuery}%,afternoon.ilike.%${escapedQuery}%,night.ilike.%${escapedQuery}%`
+    const searchCondition = `highlights_high.ilike.%${escapedQuery}%,highlights_low.ilike.%${escapedQuery}%,morning.ilike.%${escapedQuery}%,afternoon.ilike.%${escapedQuery}%,night.ilike.%${escapedQuery}%,more.ilike.%${escapedQuery}%`
     queryBuilder = queryBuilder.or(searchCondition)
   }
 
