@@ -427,10 +427,10 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
         if (tagIds.length > 0) {
           const { error: linkError } = await supabase
             .from('entry_tags')
-            .insert(tagIds.map(tag_id => ({
+            .upsert(tagIds.map(tag_id => ({
               entry_id: entryResult.id,
               tag_id,
-            })))
+            })), { onConflict: 'entry_id,tag_id', ignoreDuplicates: true })
 
           if (linkError) {
             console.warn(`Warning: failed to link tags for ${entry.date}:`, linkError)
