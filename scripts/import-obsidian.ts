@@ -170,7 +170,13 @@ function parseJournalFile(filePath: string): ParsedEntry | null {
   // Parse sleep hours (decimal, e.g. "7.5")
   const sleepRaw = frontmatter.sleep
   const sleepHoursParsed = sleepRaw !== undefined && sleepRaw !== null
-    ? (() => { const v = parseFloat(String(sleepRaw)); return !isNaN(v) && v > 0 ? v : null })()
+    ? (() => {
+        let v = parseFloat(String(sleepRaw))
+        if (isNaN(v) || v <= 0) return null
+        // YAML parses "7:30" as sexagesimal (450 minutes) — convert back to hours
+        if (v > 24 && v <= 1440) v = Math.round((v / 60) * 100) / 100
+        return v > 0 && v <= 24 ? v : null
+      })()
     : null
 
   // Parse tags
