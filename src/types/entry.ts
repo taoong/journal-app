@@ -5,6 +5,8 @@ export interface Entry {
   p_score: number | null
   l_score: number | null
   weight: number | null
+  calories: number | null
+  sleep_hours: number | null
   highlights_high: string | null
   highlights_low: string | null
   morning: string | null

@@ -51,6 +51,7 @@ src/
 │   │       ├── loading.tsx       # Loading skeleton
 │   │       └── timeline/page.tsx # Daily timeline visualization
 │   ├── login/page.tsx            # Google OAuth login
+│   ├── visualizations/page.tsx   # Charts page (P/L, weight, sleep, calories)
 │   ├── settings/
 │   │   ├── page.tsx              # User settings (timezone)
 │   │   └── loading.tsx           # Loading skeleton
@@ -138,6 +139,8 @@ interface Entry {
   p_score: number | null     // 1–10
   l_score: number | null     // 1–10
   weight: number | null
+  calories: number | null
+  sleep_hours: number | null
   highlights_high: string | null
   highlights_low: string | null
   morning: string | null
@@ -190,7 +193,7 @@ Full schema in `journal-schema.sql`. All tables have Row-Level Security (RLS) en
 **`entries`** — Core journal entries
 - PK: `id` (UUID)
 - Unique constraint: `(user_id, date)`
-- Key fields: `date`, `p_score` (1–10), `l_score` (1–10), `weight`, `highlights_high`, `highlights_low`, `morning`, `afternoon`, `night`, `complete` (boolean)
+- Key fields: `date`, `p_score` (1–10), `l_score` (1–10), `weight`, `calories` (integer), `sleep_hours` (numeric 4,2), `highlights_high`, `highlights_low`, `morning`, `afternoon`, `night`, `complete` (boolean)
 - Trigger: auto-updates `updated_at`
 
 **`tags`** — User-defined tags
@@ -260,6 +263,7 @@ Two separate clients to match Next.js rendering contexts:
 | `/entries/[date]` | Server | Edit/view entry by date |
 | `/entries/[date]/timeline` | Server | Daily timeline visualization |
 | `/settings` | Server | Timezone and preferences |
+| `/visualizations` | Server | Charts for P/L scores, weight, sleep, calories |
 
 ### API Routes
 
@@ -292,6 +296,7 @@ Two separate clients to match Next.js rendering contexts:
 | `EntryCard.tsx` | Compact entry display for list view |
 | `MissingDayCard.tsx` | Shows days with missing or incomplete entries |
 | `TimelineWidget.tsx` | Recharts-based visualization of a day's bullet-point timeline |
+| `VisualizationsContent.tsx` | Client Component rendering Recharts line/bar charts for P/L scores, weight, sleep, and calories with configurable time ranges |
 | `NavLink.tsx` | Link component that triggers LoadingContext loading state on navigation |
 | `LoadingScreen.tsx` | Full-page loading overlay shown during page transitions |
 

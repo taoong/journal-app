@@ -62,6 +62,8 @@ interface ParsedEntry {
   p_score: number | null
   l_score: number | null
   weight: number | null
+  calories: number | null
+  sleep_hours: number | null
   tags: string[]
   highlights_high: string | null
   highlights_low: string | null
@@ -159,6 +161,18 @@ function parseJournalFile(filePath: string): ParsedEntry | null {
   // Parse weight
   const weight = frontmatter.weight ? parseFloat(String(frontmatter.weight)) : null
 
+  // Parse calories (integer)
+  const caloriesRaw = frontmatter.calories
+  const caloriesParsed = caloriesRaw !== undefined && caloriesRaw !== null
+    ? (() => { const v = parseInt(String(caloriesRaw), 10); return !isNaN(v) && v > 0 ? v : null })()
+    : null
+
+  // Parse sleep hours (decimal, e.g. "7.5")
+  const sleepRaw = frontmatter.sleep
+  const sleepHoursParsed = sleepRaw !== undefined && sleepRaw !== null
+    ? (() => { const v = parseFloat(String(sleepRaw)); return !isNaN(v) && v > 0 ? v : null })()
+    : null
+
   // Parse tags
   const tags: string[] = Array.isArray(frontmatter.tags)
     ? frontmatter.tags.filter((t: unknown) => typeof t === 'string' && t.trim())
@@ -172,6 +186,8 @@ function parseJournalFile(filePath: string): ParsedEntry | null {
     p_score,
     l_score,
     weight: isNaN(weight!) ? null : weight,
+    calories: caloriesParsed,
+    sleep_hours: sleepHoursParsed,
     tags,
     highlights_high: sections.highlights_high,
     highlights_low: sections.highlights_low,
@@ -394,6 +410,8 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
           p_score: entry.p_score,
           l_score: entry.l_score,
           weight: entry.weight,
+          calories: entry.calories,
+          sleep_hours: entry.sleep_hours,
           highlights_high: entry.highlights_high,
           highlights_low: entry.highlights_low,
           morning: entry.morning,

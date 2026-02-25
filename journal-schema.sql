@@ -17,6 +17,8 @@ create table entries (
   p_score int check (p_score >= 1 and p_score <= 10),
   l_score int check (l_score >= 1 and l_score <= 10),
   weight numeric(5,2),
+  calories integer,
+  sleep_hours numeric(4,2),
   complete boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -26,6 +28,8 @@ create table entries (
 -- Migration for existing databases:
 -- ALTER TABLE entries ADD COLUMN complete BOOLEAN DEFAULT false;
 -- ALTER TABLE entries ADD COLUMN more TEXT;
+-- ALTER TABLE entries ADD COLUMN IF NOT EXISTS calories integer;
+-- ALTER TABLE entries ADD COLUMN IF NOT EXISTS sleep_hours numeric(4,2);
 
 -- Tags table
 create table tags (

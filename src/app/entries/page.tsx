@@ -6,7 +6,7 @@ import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
 import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
-import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
 import { escapeSearchQuery } from '@/lib/validation'
 import { PAGE_SIZE, DEFAULT_TIMEZONE } from '@/lib/constants'
 import { calculateIncompleteDays, countIncompleteDays, getDayStatus } from '@/lib/incomplete-days'
@@ -162,6 +162,13 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-zinc-900">Journal</h1>
             <div className="flex items-center gap-2">
+              <NavLink
+                href="/visualizations"
+                className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
+                aria-label="Visualizations"
+              >
+                <TrendingUp className="w-5 h-5" />
+              </NavLink>
               <Link
                 href="/settings"
                 className="p-2 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
