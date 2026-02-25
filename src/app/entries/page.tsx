@@ -6,7 +6,7 @@ import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
 import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
-import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { escapeSearchQuery } from '@/lib/validation'
 import { PAGE_SIZE, DEFAULT_TIMEZONE } from '@/lib/constants'
 import { calculateIncompleteDays, countIncompleteDays, getDayStatus } from '@/lib/incomplete-days'
@@ -442,14 +442,41 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
 
             {((incomplete && incompleteDaysList.length === 0) || (!incomplete && entries.length === 0)) && (
               <div className="text-center py-16">
-                <p className="text-zinc-500 mb-4">No entries found</p>
-                <Link
-                  href="/entries/new"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create your first entry
-                </Link>
+                {incomplete ? (
+                  <>
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                    <p className="text-zinc-700 font-medium mb-1">All caught up</p>
+                    <p className="text-zinc-500 text-sm">No incomplete entries to review.</p>
+                  </>
+                ) : q ? (
+                  <>
+                    <Search className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+                    <p className="text-zinc-700 font-medium mb-1">No results for &ldquo;{q}&rdquo;</p>
+                    <p className="text-zinc-500 text-sm">Try a different search term.</p>
+                  </>
+                ) : tag ? (
+                  <>
+                    <p className="text-zinc-700 font-medium mb-1">No entries tagged &ldquo;{tag}&rdquo;</p>
+                    <p className="text-zinc-500 text-sm">Entries with this tag will appear here.</p>
+                  </>
+                ) : (from || to) ? (
+                  <>
+                    <CalendarIcon className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+                    <p className="text-zinc-700 font-medium mb-1">No entries in this date range</p>
+                    <p className="text-zinc-500 text-sm">Try adjusting the dates.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-zinc-500 mb-4">No entries found</p>
+                    <Link
+                      href="/entries/new"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create your first entry
+                    </Link>
+                  </>
+                )}
               </div>
             )}
 
