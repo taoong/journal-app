@@ -61,7 +61,7 @@ export function calculateIncompleteDays(
 
     if (status === 'missing') {
       incompleteDays.push({ date: dateStr, type: 'missing' })
-    } else if (status === 'incomplete' && entry) {
+    } else if (status === 'incomplete' && entry && dateStr !== todayStr) {
       incompleteDays.push({
         date: dateStr,
         type: 'incomplete',
@@ -98,7 +98,7 @@ export function countIncompleteDays(
     const dateStr = format(d, 'yyyy-MM-dd')
     const entry = entriesByDate.get(dateStr)
     const status = getDayStatus(dateStr, todayStr, entry, JOURNAL_START_DATE)
-    if (status === 'missing' || (status === 'incomplete' && entry)) count++
+    if (status === 'missing' || (status === 'incomplete' && entry && dateStr !== todayStr)) count++
   }
   return count
 }
