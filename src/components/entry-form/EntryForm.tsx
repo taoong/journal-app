@@ -178,8 +178,12 @@ export default function EntryForm({
         localPScore={localPScore}
         localLScore={localLScore}
         weight={form.weight}
+        calories={form.calories}
+        sleepHours={form.sleepHours}
         sliderHandlers={sliderHandlers}
         onWeightChange={fieldHandlers.weight}
+        onCaloriesChange={fieldHandlers.calories}
+        onSleepHoursChange={fieldHandlers.sleepHours}
       />
 
       {/* Tag Selector */}

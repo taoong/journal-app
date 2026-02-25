@@ -35,6 +35,8 @@ export function useEntryForm({
     pScore: entry?.p_score ?? 5,
     lScore: entry?.l_score ?? 5,
     weight: entry?.weight?.toString() || '',
+    calories: entry?.calories?.toString() || '',
+    sleepHours: entry?.sleep_hours?.toString() || '',
   }))
 
   // UI state
@@ -93,6 +95,8 @@ export function useEntryForm({
       night: (value: string) => updateField('night', value),
       more: (value: string) => updateField('more', value),
       weight: (value: string) => updateField('weight', value),
+      calories: (value: string) => updateField('calories', value),
+      sleepHours: (value: string) => updateField('sleepHours', value),
     }),
     [updateField]
   )
@@ -170,6 +174,8 @@ export function useEntryForm({
           p_score: form.pScore,
           l_score: form.lScore,
           weight: form.weight ? parseFloat(form.weight) : null,
+          calories: form.calories ? parseInt(form.calories, 10) : null,
+          sleep_hours: form.sleepHours ? parseFloat(form.sleepHours) : null,
           complete,
         }
 

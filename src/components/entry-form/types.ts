@@ -22,6 +22,8 @@ export interface Entry {
   p_score?: number
   l_score?: number
   weight?: number
+  calories?: number
+  sleep_hours?: number
   complete?: boolean
 }
 
@@ -36,6 +38,8 @@ export interface FormState {
   pScore: number
   lScore: number
   weight: string
+  calories: string
+  sleepHours: string
 }
 
 export interface EntryFormProps {
