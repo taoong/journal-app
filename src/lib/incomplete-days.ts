@@ -13,9 +13,11 @@ interface EntryData {
 }
 
 /**
- * Checks if an entry is considered complete based on content and explicit flag
+ * Checks if an entry is considered complete based on content and explicit flag.
+ * Entries before 2025 are always treated as complete.
  */
-export function isEntryComplete(entry: Pick<EntryData, 'highlights_high' | 'highlights_low' | 'complete'>): boolean {
+export function isEntryComplete(entry: Pick<EntryData, 'date' | 'highlights_high' | 'highlights_low' | 'complete'>): boolean {
+  if (entry.date < '2025-01-01') return true
   const hasContent = !!(entry.highlights_high || entry.highlights_low)
   return entry.complete !== false && hasContent
 }
