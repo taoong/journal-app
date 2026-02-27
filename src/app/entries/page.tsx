@@ -56,10 +56,12 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   // Build entries query with filters
   let entriesQuery = supabase
     .from('entries')
-    .select(`
-      id, date, p_score, l_score, weight,
-      entry_tags (tags (name))
-    `, { count: 'exact' })
+    .select(
+      tag
+        ? `id, date, p_score, l_score, weight, entry_tags!inner (tags!inner (name))`
+        : `id, date, p_score, l_score, weight, entry_tags (tags (name))`,
+      { count: 'exact' }
+    )
     .eq('user_id', user?.id)
 
   // Apply filters (but NOT incomplete - we handle that separately)
