@@ -73,6 +73,34 @@ interface ParsedEntry {
   more: string | null
 }
 
+interface ImportEntryData {
+  p_score: number | null
+  l_score: number | null
+  weight: number | null
+  calories: number | null
+  sleep_hours: number | null
+  highlights_high: string | null
+  highlights_low: string | null
+  morning: string | null
+  afternoon: string | null
+  night: string | null
+  more: string | null
+  tags: string[]
+}
+
+function hasConflict(obs: ImportEntryData, db: ImportEntryData): boolean {
+  const fields = ['p_score', 'l_score', 'weight', 'calories', 'sleep_hours',
+    'highlights_high', 'highlights_low', 'morning', 'afternoon', 'night', 'more'] as const
+  for (const f of fields) {
+    if ((obs[f] ?? null) !== (db[f] ?? null)) return true
+  }
+  const a = new Set((obs.tags ?? []).map(t => t.toLowerCase()))
+  const b = new Set((db.tags ?? []).map(t => t.toLowerCase()))
+  if (a.size !== b.size) return true
+  for (const t of a) if (!b.has(t)) return true
+  return false
+}
+
 /**
  * Find all markdown files that could be journal entries
  */
@@ -360,6 +388,7 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
   let imported = 0
   const skipped = 0
   let errors = 0
+  let conflicts = 0
 
   // First, fetch or create all tags
   const tagMap = new Map<string, string>() // tag name -> tag id
@@ -404,9 +433,88 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
 
   console.log(`Found ${tagMap.size} tags (${missingTags.length} newly created)`)
 
+  // Batch pre-fetch existing entries for conflict detection
+  const datesToImport = entries.map(e => e.date)
+  const { data: existingRows } = await supabase
+    .from('entries')
+    .select(`id, date, p_score, l_score, weight, calories, sleep_hours,
+             highlights_high, highlights_low, morning, afternoon, night, more,
+             entry_tags ( tags ( name ) )`)
+    .eq('user_id', USER_ID)
+    .in('date', datesToImport)
+
+  const existingByDate = new Map<string, ImportEntryData & { id: string }>()
+  for (const row of existingRows ?? []) {
+    const tags = (row.entry_tags ?? [])
+      .map((et: any) => et.tags?.name)
+      .filter((n: unknown): n is string => typeof n === 'string')
+    existingByDate.set(row.date, { ...row, tags })
+  }
+
   // Import entries
   for (const entry of entries) {
     try {
+      const obsidianSnapshot: ImportEntryData = {
+        p_score: entry.p_score,
+        l_score: entry.l_score,
+        weight: entry.weight,
+        calories: entry.calories,
+        sleep_hours: entry.sleep_hours,
+        highlights_high: entry.highlights_high,
+        highlights_low: entry.highlights_low,
+        morning: entry.morning,
+        afternoon: entry.afternoon,
+        night: entry.night,
+        more: entry.more,
+        tags: entry.tags,
+      }
+
+      const existing = existingByDate.get(entry.date)
+
+      if (existing && hasConflict(obsidianSnapshot, existing)) {
+        const dbSnapshot: ImportEntryData = {
+          p_score: existing.p_score,
+          l_score: existing.l_score,
+          weight: existing.weight,
+          calories: existing.calories,
+          sleep_hours: existing.sleep_hours,
+          highlights_high: existing.highlights_high,
+          highlights_low: existing.highlights_low,
+          morning: existing.morning,
+          afternoon: existing.afternoon,
+          night: existing.night,
+          more: existing.more,
+          tags: existing.tags,
+        }
+
+        // Check for existing pending row
+        const { data: existingConflict } = await supabase
+          .from('pending_imports')
+          .select('id')
+          .eq('user_id', USER_ID)
+          .eq('date', entry.date)
+          .eq('status', 'pending')
+          .maybeSingle()
+
+        const payload = {
+          user_id: USER_ID, date: entry.date, status: 'pending' as const,
+          obsidian_data: obsidianSnapshot, db_data: dbSnapshot,
+        }
+
+        const { error: conflictError } = existingConflict
+          ? await supabase.from('pending_imports').update(payload).eq('id', existingConflict.id)
+          : await supabase.from('pending_imports').insert(payload)
+
+        if (conflictError) {
+          console.error(`Error staging conflict for ${entry.date}:`, conflictError)
+          errors++
+          continue
+        }
+        conflicts++
+        console.log(`  Conflict staged: ${entry.date}`)
+        continue
+      }
+
       // Upsert entry
       const { data: entryResult, error: entryError } = await supabase
         .from('entries')
@@ -472,7 +580,11 @@ async function importEntries(entries: ParsedEntry[]): Promise<void> {
   console.log(`\nImport complete:`)
   console.log(`  Imported: ${imported}`)
   console.log(`  Skipped: ${skipped}`)
+  console.log(`  Conflicts: ${conflicts}`)
   console.log(`  Errors: ${errors}`)
+  if (conflicts > 0) {
+    console.log(`\n  ${conflicts} conflict${conflicts === 1 ? '' : 's'} detected — review at http://localhost:3000/import/conflicts`)
+  }
 }
 
 async function main() {

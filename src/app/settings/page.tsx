@@ -3,14 +3,14 @@ import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import LocationImport from '@/components/LocationImport'
 import TimezoneSelector from '@/components/TimezoneSelector'
-import { Check, Plus, Calendar, MapPin, Activity, Globe } from 'lucide-react'
+import { Check, Plus, Calendar, MapPin, Activity, Globe, GitMerge } from 'lucide-react'
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
 
   // Check integration status and user preferences
-  const [{ data: ouraIntegration }, { data: preferences }] = await Promise.all([
+  const [{ data: ouraIntegration }, { data: preferences }, { count: pendingConflicts }] = await Promise.all([
     supabase
       .from('integrations')
       .select('*')
@@ -22,6 +22,11 @@ export default async function SettingsPage() {
       .select('timezone')
       .eq('user_id', user?.id)
       .single(),
+    supabase
+      .from('pending_imports')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user?.id)
+      .eq('status', 'pending'),
   ])
 
   const ouraConnected = !!ouraIntegration?.access_token
@@ -39,6 +44,27 @@ export default async function SettingsPage() {
             ← Back
           </Link>
         </div>
+
+        {/* Import Conflicts Banner */}
+        {(pendingConflicts ?? 0) > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <GitMerge className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-medium text-amber-900">Import Conflicts</h3>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  {pendingConflicts} entr{pendingConflicts === 1 ? 'y needs' : 'ies need'} review from Obsidian import
+                </p>
+              </div>
+            </div>
+            <Link href="/import/conflicts"
+              className="text-sm px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-colors font-medium">
+              Review ({pendingConflicts})
+            </Link>
+          </div>
+        )}
 
         {/* Preferences */}
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-6">

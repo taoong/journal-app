@@ -258,3 +258,33 @@ create trigger update_user_preferences_updated_at
   before update on user_preferences
   for each row
   execute procedure update_updated_at_column();
+
+-- Pending imports staging table (for conflict resolution between Obsidian and web UI edits)
+create table pending_imports (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  date date not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'accepted_obsidian', 'accepted_web')),
+  obsidian_data jsonb not null,  -- ImportEntryData shape
+  db_data jsonb not null,        -- ImportEntryData shape
+  created_at timestamptz default timezone('utc', now()) not null,
+  updated_at timestamptz default timezone('utc', now()) not null
+);
+
+-- Only one pending conflict per user+date; resolved rows persist as audit trail
+create unique index pending_imports_pending_uniq
+  on pending_imports (user_id, date)
+  where (status = 'pending');
+
+alter table pending_imports enable row level security;
+
+create policy "Users can view their own pending imports"
+  on pending_imports for select using (auth.uid() = user_id);
+
+create policy "Users can update their own pending imports"
+  on pending_imports for update using (auth.uid() = user_id);
+
+create trigger update_pending_imports_updated_at
+  before update on pending_imports
+  for each row execute procedure update_updated_at_column();

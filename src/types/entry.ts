@@ -58,3 +58,29 @@ export interface Analytics {
   totalEntries: number
   incompleteDays: number
 }
+
+export interface ImportEntryData {
+  p_score: number | null
+  l_score: number | null
+  weight: number | null
+  calories: number | null
+  sleep_hours: number | null
+  highlights_high: string | null
+  highlights_low: string | null
+  morning: string | null
+  afternoon: string | null
+  night: string | null
+  more: string | null
+  tags: string[]
+}
+
+export interface PendingImport {
+  id: string
+  user_id: string
+  date: string
+  status: 'pending' | 'accepted_obsidian' | 'accepted_web'
+  obsidian_data: ImportEntryData
+  db_data: ImportEntryData
+  created_at: string
+  updated_at: string
+}
