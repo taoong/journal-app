@@ -29,8 +29,8 @@ const TEXT_FIELD_KEYS = new Set<keyof ImportEntryData>([
   'highlights_high', 'highlights_low', 'morning', 'afternoon', 'night', 'more',
 ])
 
-type FieldSource = 'web' | 'obsidian'
-// 'same' = identical values, 'smart' = auto-resolved (additive diff), 'conflict' = genuine conflict
+// null = user has manually edited the combined value (no source ring shown)
+type FieldSource = 'web' | 'obsidian' | null
 type FieldKind = 'same' | 'smart' | 'conflict'
 
 const ALL_FIELD_KEYS: (keyof ImportEntryData)[] = [
@@ -46,34 +46,22 @@ function tagsEqual(a: string[], b: string[]): boolean {
   return true
 }
 
-/**
- * For each field, determine whether the difference is a genuine conflict or
- * can be auto-resolved by picking the "more complete" value:
- *  - Text fields: if one value is a prefix of the other, the longer one wins
- *  - Tags: if one set is a subset of the other, the superset wins
- *  - Numeric fields: any difference is a genuine conflict
- */
 function computeSmartSources(
   web: ImportEntryData,
   obs: ImportEntryData,
-): { sources: Record<string, FieldSource>; kinds: Record<string, FieldKind> } {
-  const sources: Record<string, FieldSource> = {}
+): { sources: Record<string, 'web' | 'obsidian'>; kinds: Record<string, FieldKind> } {
+  const sources: Record<string, 'web' | 'obsidian'> = {}
   const kinds: Record<string, FieldKind> = {}
 
   for (const k of ALL_FIELD_KEYS) {
     const webVal = web[k]
     const obsVal = obs[k]
-
     const differs =
       k === 'tags'
         ? !tagsEqual(web.tags ?? [], obs.tags ?? [])
         : (webVal ?? null) !== (obsVal ?? null)
 
-    if (!differs) {
-      sources[k] = 'web'
-      kinds[k] = 'same'
-      continue
-    }
+    if (!differs) { sources[k] = 'web'; kinds[k] = 'same'; continue }
 
     if (k === 'tags') {
       const w = new Set((web.tags ?? []).map(t => t.toLowerCase()))
@@ -87,7 +75,6 @@ function computeSmartSources(
       if (w.startsWith(o)) { sources[k] = 'web'; kinds[k] = 'smart'; continue }
     }
 
-    // Genuine conflict — default to keeping web
     sources[k] = 'web'
     kinds[k] = 'conflict'
   }
@@ -116,43 +103,43 @@ function ConflictCard({
   const web = conflict.db_data
   const obs = conflict.obsidian_data
 
-  // Computed once — web/obs are stable for this card's lifetime
   const { sources: smartSources, kinds } = computeSmartSources(web, obs)
   const allSmart = ALL_FIELD_KEYS.every(k => kinds[k] !== 'conflict')
 
+  // Which source button is highlighted (null = user typed directly, no ring)
   const [fieldSources, setFieldSources] = useState<Record<string, FieldSource>>(
     () => ({ ...smartSources })
   )
+  // The actual edit buffer — what gets submitted on Apply
+  const [combinedValues, setCombinedValues] = useState<Record<string, ImportEntryData[keyof ImportEntryData]>>(
+    () => Object.fromEntries(ALL_FIELD_KEYS.map(k => [k, smartSources[k] === 'web' ? web[k] : obs[k]]))
+  )
+
   const [isResolving, setIsResolving] = useState(allSmart)
   const [error, setError] = useState<string | null>(null)
   const autoApplied = useRef(false)
 
-  async function submitMerge(sources: Record<string, FieldSource>) {
-    const mergedData = Object.fromEntries(
-      ALL_FIELD_KEYS.map(k => [k, sources[k] === 'web' ? web[k] : obs[k]])
-    ) as unknown as ImportEntryData
-
+  async function submitMergeData(data: ImportEntryData) {
     const res = await fetch('/api/import/conflicts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: conflict.id, resolution: 'merged', mergedData }),
+      body: JSON.stringify({ id: conflict.id, resolution: 'merged', mergedData: data }),
     })
     if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error ?? 'Failed to resolve conflict')
+      const json = await res.json()
+      throw new Error(json.error ?? 'Failed to resolve conflict')
     }
   }
 
-  // Auto-apply when all diffs are purely additive (no genuine conflicts)
   useEffect(() => {
     if (!allSmart || autoApplied.current) return
     autoApplied.current = true
-    submitMerge(smartSources).then(() => {
-      onResolved(conflict.id)
-    }).catch(err => {
-      setError(err.message)
-      setIsResolving(false)
-    })
+    const mergedData = Object.fromEntries(
+      ALL_FIELD_KEYS.map(k => [k, smartSources[k] === 'web' ? web[k] : obs[k]])
+    ) as unknown as ImportEntryData
+    submitMergeData(mergedData)
+      .then(() => onResolved(conflict.id))
+      .catch(err => { setError(err.message); setIsResolving(false) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -160,7 +147,7 @@ function ConflictCard({
     setIsResolving(true)
     setError(null)
     try {
-      await submitMerge(fieldSources)
+      await submitMergeData(combinedValues as unknown as ImportEntryData)
       onResolved(conflict.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error — please try again')
@@ -168,15 +155,23 @@ function ConflictCard({
     }
   }
 
-  function setAllSources(source: FieldSource) {
-    setFieldSources(Object.fromEntries(ALL_FIELD_KEYS.map(k => [k, source])))
-  }
-
-  function setFieldSource(key: string, source: FieldSource) {
+  // Clicking a source button snaps Combined to that source's value and shows ring
+  function selectSource(key: string, source: 'web' | 'obsidian') {
     setFieldSources(prev => ({ ...prev, [key]: source }))
+    setCombinedValues(prev => ({ ...prev, [key]: source === 'web' ? web[key as keyof ImportEntryData] : obs[key as keyof ImportEntryData] }))
   }
 
-  // If all smart: show a transient resolving state (card disappears on success)
+  // Typing directly clears the ring (neither source is "selected") and updates the buffer
+  function editCombined(key: string, value: ImportEntryData[keyof ImportEntryData]) {
+    setFieldSources(prev => ({ ...prev, [key]: null }))
+    setCombinedValues(prev => ({ ...prev, [key]: value }))
+  }
+
+  function setAllSources(source: 'web' | 'obsidian') {
+    setFieldSources(Object.fromEntries(ALL_FIELD_KEYS.map(k => [k, source])))
+    setCombinedValues(Object.fromEntries(ALL_FIELD_KEYS.map(k => [k, source === 'web' ? web[k] : obs[k]])))
+  }
+
   if (allSmart) {
     return (
       <div className="bg-white rounded-xl border border-zinc-200 px-5 py-4 flex items-center gap-2 text-sm text-zinc-400">
@@ -184,11 +179,13 @@ function ConflictCard({
           <>
             <span className="text-red-600">{error}</span>
             <button
-              onClick={() => { setIsResolving(true); setError(null); submitMerge(smartSources).then(() => onResolved(conflict.id)).catch(e => { setError(e.message); setIsResolving(false) }) }}
+              onClick={() => {
+                setIsResolving(true); setError(null)
+                const md = Object.fromEntries(ALL_FIELD_KEYS.map(k => [k, smartSources[k] === 'web' ? web[k] : obs[k]])) as unknown as ImportEntryData
+                submitMergeData(md).then(() => onResolved(conflict.id)).catch(e => { setError(e.message); setIsResolving(false) })
+              }}
               className="ml-2 underline"
-            >
-              Retry
-            </button>
+            >Retry</button>
           </>
         ) : (
           <span>{isResolving ? `Auto-resolving ${conflict.date}…` : ''}</span>
@@ -206,7 +203,7 @@ function ConflictCard({
 
       <div className="overflow-x-auto">
         <div className="grid grid-cols-[120px_1fr_1fr_1fr] min-w-[640px]">
-          {/* Header row */}
+          {/* Header */}
           <div className="px-3 py-2 bg-zinc-50 text-xs font-medium text-zinc-500 border-b border-r border-zinc-100">Field</div>
           <div className="px-3 py-2 bg-zinc-50 text-xs font-medium text-zinc-700 border-b border-r border-zinc-100">Web (current)</div>
           <div className="px-3 py-2 bg-zinc-50 text-xs font-medium text-zinc-700 border-b border-r border-zinc-100">Obsidian (import)</div>
@@ -217,7 +214,7 @@ function ConflictCard({
             const kind = kinds[key]
             const rowClass = kind === 'conflict' ? 'bg-amber-50' : kind === 'smart' ? 'bg-emerald-50/60' : ''
             const selected = fieldSources[key]
-            const combinedVal = selected === 'web' ? web[key] : obs[key]
+            const numVal = combinedValues[key] as number | null
             return (
               <>
                 <div key={`${key}-label`} className={`px-3 py-2 text-xs text-zinc-500 border-b border-r border-zinc-100 ${rowClass}`}>
@@ -227,14 +224,14 @@ function ConflictCard({
                   <>
                     <button
                       key={`${key}-web`}
-                      onClick={() => setFieldSource(key, 'web')}
+                      onClick={() => selectSource(key, 'web')}
                       className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       {web[key] != null ? String(web[key]) : <span className="text-zinc-300">—</span>}
                     </button>
                     <button
                       key={`${key}-obs`}
-                      onClick={() => setFieldSource(key, 'obsidian')}
+                      onClick={() => selectSource(key, 'obsidian')}
                       className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       {obs[key] != null ? String(obs[key]) : <span className="text-zinc-300">—</span>}
@@ -242,16 +239,23 @@ function ConflictCard({
                   </>
                 ) : (
                   <>
-                    <div key={`${key}-web`} className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 ${rowClass}`}>
+                    <div key={`${key}-web`} className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100`}>
                       {web[key] != null ? String(web[key]) : <span className="text-zinc-300">—</span>}
                     </div>
-                    <div key={`${key}-obs`} className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 ${rowClass}`}>
+                    <div key={`${key}-obs`} className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100`}>
                       {obs[key] != null ? String(obs[key]) : <span className="text-zinc-300">—</span>}
                     </div>
                   </>
                 )}
-                <div key={`${key}-combined`} className={`px-3 py-2 text-sm text-zinc-700 border-b border-zinc-100 ${rowClass}`}>
-                  {combinedVal != null ? String(combinedVal) : <span className="text-zinc-300">—</span>}
+                <div key={`${key}-combined`} className={`px-2 py-1.5 border-b border-zinc-100 ${rowClass}`}>
+                  <input
+                    type="number"
+                    step="any"
+                    value={numVal ?? ''}
+                    onChange={e => editCombined(key, e.target.value !== '' ? Number(e.target.value) : null)}
+                    placeholder="—"
+                    className="w-full text-sm text-zinc-700 bg-transparent outline-none focus:ring-1 focus:ring-inset focus:ring-blue-300 rounded px-1 py-0.5 placeholder:text-zinc-300"
+                  />
                 </div>
               </>
             )
@@ -262,20 +266,20 @@ function ConflictCard({
             const kind = kinds['tags']
             const rowClass = kind === 'conflict' ? 'bg-amber-50' : kind === 'smart' ? 'bg-emerald-50/60' : ''
             const selected = fieldSources['tags']
-            const combinedTags = selected === 'web' ? (web.tags ?? []) : (obs.tags ?? [])
+            const combinedTags = combinedValues['tags'] as string[]
             return (
               <>
                 <div className={`px-3 py-2 text-xs text-zinc-500 border-b border-r border-zinc-100 ${rowClass}`}>Tags</div>
                 {kind !== 'same' ? (
                   <>
                     <button
-                      onClick={() => setFieldSource('tags', 'web')}
+                      onClick={() => selectSource('tags', 'web')}
                       className={`px-3 py-2 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       <TagChips tags={web.tags ?? []} />
                     </button>
                     <button
-                      onClick={() => setFieldSource('tags', 'obsidian')}
+                      onClick={() => selectSource('tags', 'obsidian')}
                       className={`px-3 py-2 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       <TagChips tags={obs.tags ?? []} />
@@ -283,16 +287,22 @@ function ConflictCard({
                   </>
                 ) : (
                   <>
-                    <div className={`px-3 py-2 border-b border-r border-zinc-100 ${rowClass}`}>
+                    <div className={`px-3 py-2 border-b border-r border-zinc-100`}>
                       <TagChips tags={web.tags ?? []} />
                     </div>
-                    <div className={`px-3 py-2 border-b border-r border-zinc-100 ${rowClass}`}>
+                    <div className={`px-3 py-2 border-b border-r border-zinc-100`}>
                       <TagChips tags={obs.tags ?? []} />
                     </div>
                   </>
                 )}
-                <div className={`px-3 py-2 border-b border-zinc-100 ${rowClass}`}>
-                  <TagChips tags={combinedTags} />
+                <div className={`px-2 py-1.5 border-b border-zinc-100 ${rowClass}`}>
+                  <input
+                    type="text"
+                    value={combinedTags.join(', ')}
+                    onChange={e => editCombined('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
+                    placeholder="tag1, tag2"
+                    className="w-full text-xs text-zinc-700 bg-transparent outline-none focus:ring-1 focus:ring-inset focus:ring-blue-300 rounded px-1 py-0.5 placeholder:text-zinc-300"
+                  />
                 </div>
               </>
             )
@@ -305,7 +315,8 @@ function ConflictCard({
             const isLast = key === 'more'
             const borderClass = isLast ? '' : 'border-b'
             const selected = fieldSources[key]
-            const combinedVal = selected === 'web' ? web[key] : obs[key]
+            const textVal = (combinedValues[key] as string | null) ?? ''
+            const rows = Math.max(2, Math.min(8, textVal.split('\n').length + 1))
             return (
               <>
                 <div key={`${key}-label`} className={`px-3 py-2 text-xs text-zinc-500 ${borderClass} border-r border-zinc-100 ${rowClass}`}>
@@ -315,7 +326,7 @@ function ConflictCard({
                   <>
                     <button
                       key={`${key}-web`}
-                      onClick={() => setFieldSource(key, 'web')}
+                      onClick={() => selectSource(key, 'web')}
                       className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       {web[key] ? (
@@ -326,7 +337,7 @@ function ConflictCard({
                     </button>
                     <button
                       key={`${key}-obs`}
-                      onClick={() => setFieldSource(key, 'obsidian')}
+                      onClick={() => selectSource(key, 'obsidian')}
                       className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
                       {obs[key] ? (
@@ -338,14 +349,14 @@ function ConflictCard({
                   </>
                 ) : (
                   <>
-                    <div key={`${key}-web`} className={`px-3 py-2 ${borderClass} border-r border-zinc-100 ${rowClass}`}>
+                    <div key={`${key}-web`} className={`px-3 py-2 ${borderClass} border-r border-zinc-100`}>
                       {web[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{web[key] as string}</pre>
                       ) : (
                         <span className="text-zinc-300 text-xs">—</span>
                       )}
                     </div>
-                    <div key={`${key}-obs`} className={`px-3 py-2 ${borderClass} border-r border-zinc-100 ${rowClass}`}>
+                    <div key={`${key}-obs`} className={`px-3 py-2 ${borderClass} border-r border-zinc-100`}>
                       {obs[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{obs[key] as string}</pre>
                       ) : (
@@ -354,12 +365,14 @@ function ConflictCard({
                     </div>
                   </>
                 )}
-                <div key={`${key}-combined`} className={`px-3 py-2 ${borderClass} border-zinc-100 ${rowClass}`}>
-                  {combinedVal ? (
-                    <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{combinedVal as string}</pre>
-                  ) : (
-                    <span className="text-zinc-300 text-xs">—</span>
-                  )}
+                <div key={`${key}-combined`} className={`px-2 py-1.5 ${borderClass} border-zinc-100 ${rowClass}`}>
+                  <textarea
+                    value={textVal}
+                    rows={rows}
+                    onChange={e => editCombined(key, e.target.value || null)}
+                    placeholder="—"
+                    className="w-full text-xs text-zinc-700 font-sans whitespace-pre-wrap resize-y bg-transparent outline-none focus:ring-1 focus:ring-inset focus:ring-blue-300 rounded px-1 py-0.5 placeholder:text-zinc-300"
+                  />
                 </div>
               </>
             )
