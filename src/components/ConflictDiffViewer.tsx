@@ -85,7 +85,7 @@ function computeSmartSources(
 // Returns className for a selectable source button (Web or Obsidian cell)
 function selClass(kind: FieldKind, isSelected: boolean): string {
   const base = kind === 'conflict' ? 'bg-amber-50' : 'bg-emerald-50/60'
-  if (isSelected) return `${base} ring-2 ring-inset ring-zinc-400 cursor-default`
+  if (isSelected) return `${base} ring-2 ring-inset ring-zinc-400 rounded cursor-default`
   if (kind === 'conflict') return `${base} hover:bg-amber-100/70 cursor-pointer`
   return `${base} hover:bg-emerald-100/60 cursor-pointer`
 }
