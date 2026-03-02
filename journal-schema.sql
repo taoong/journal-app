@@ -265,7 +265,10 @@ create table pending_imports (
   user_id uuid references auth.users(id) on delete cascade not null,
   date date not null,
   status text not null default 'pending'
-    check (status in ('pending', 'accepted_obsidian', 'accepted_web')),
+    check (status in ('pending', 'accepted_obsidian', 'accepted_web', 'accepted_merged')),
+  -- Migration: ALTER TABLE pending_imports DROP CONSTRAINT pending_imports_status_check;
+  --            ALTER TABLE pending_imports ADD CONSTRAINT pending_imports_status_check
+  --              CHECK (status IN ('pending', 'accepted_obsidian', 'accepted_web', 'accepted_merged'));
   obsidian_data jsonb not null,  -- ImportEntryData shape
   db_data jsonb not null,        -- ImportEntryData shape
   created_at timestamptz default timezone('utc', now()) not null,

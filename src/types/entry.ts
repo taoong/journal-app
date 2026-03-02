@@ -78,7 +78,7 @@ export interface PendingImport {
   id: string
   user_id: string
   date: string
-  status: 'pending' | 'accepted_obsidian' | 'accepted_web'
+  status: 'pending' | 'accepted_obsidian' | 'accepted_web' | 'accepted_merged'
   obsidian_data: ImportEntryData
   db_data: ImportEntryData
   created_at: string
