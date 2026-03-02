@@ -84,9 +84,10 @@ function computeSmartSources(
 
 // Returns className for a selectable source button (Web or Obsidian cell)
 function selClass(kind: FieldKind, isSelected: boolean): string {
-  if (isSelected) return 'bg-blue-50 cursor-default'
-  if (kind === 'conflict') return 'bg-amber-50 hover:bg-amber-100/70 cursor-pointer'
-  return 'bg-emerald-50/60 hover:bg-emerald-100/60 cursor-pointer'
+  const base = kind === 'conflict' ? 'bg-amber-50' : 'bg-emerald-50/60'
+  if (isSelected) return `${base} ring-2 ring-inset ring-zinc-400 cursor-default`
+  if (kind === 'conflict') return `${base} hover:bg-amber-100/70 cursor-pointer`
+  return `${base} hover:bg-emerald-100/60 cursor-pointer`
 }
 
 function TagChips({ tags }: { tags: string[] }) {
@@ -232,17 +233,17 @@ function ConflictCard({
                     <button
                       key={`${key}-web`}
                       onClick={() => selectSource(key, 'web')}
-                      className={`relative px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
+                      className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
-                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       {web[key] != null ? String(web[key]) : <span className="text-zinc-300">—</span>}
                     </button>
                     <button
                       key={`${key}-obs`}
                       onClick={() => selectSource(key, 'obsidian')}
-                      className={`relative px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
+                      className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
-                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       {obs[key] != null ? String(obs[key]) : <span className="text-zinc-300">—</span>}
                     </button>
                   </>
@@ -283,16 +284,16 @@ function ConflictCard({
                   <>
                     <button
                       onClick={() => selectSource('tags', 'web')}
-                      className={`relative px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
+                      className={`px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
-                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       <TagChips tags={web.tags ?? []} />
                     </button>
                     <button
                       onClick={() => selectSource('tags', 'obsidian')}
-                      className={`relative px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
+                      className={`px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
-                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       <TagChips tags={obs.tags ?? []} />
                     </button>
                   </>
@@ -337,9 +338,9 @@ function ConflictCard({
                     <button
                       key={`${key}-web`}
                       onClick={() => selectSource(key, 'web')}
-                      className={`relative px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
+                      className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
-                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       {web[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{web[key] as string}</pre>
                       ) : (
@@ -349,9 +350,9 @@ function ConflictCard({
                     <button
                       key={`${key}-obs`}
                       onClick={() => selectSource(key, 'obsidian')}
-                      className={`relative px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
+                      className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
-                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
+
                       {obs[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{obs[key] as string}</pre>
                       ) : (
