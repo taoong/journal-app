@@ -82,6 +82,13 @@ function computeSmartSources(
   return { sources, kinds }
 }
 
+// Returns className for a selectable source button (Web or Obsidian cell)
+function selClass(kind: FieldKind, isSelected: boolean): string {
+  if (isSelected) return 'bg-blue-50 cursor-default'
+  if (kind === 'conflict') return 'bg-amber-50 hover:bg-amber-100/70 cursor-pointer'
+  return 'bg-emerald-50/60 hover:bg-emerald-100/60 cursor-pointer'
+}
+
 function TagChips({ tags }: { tags: string[] }) {
   if (!tags.length) return <span className="text-zinc-400 text-xs italic">none</span>
   return (
@@ -225,15 +232,17 @@ function ConflictCard({
                     <button
                       key={`${key}-web`}
                       onClick={() => selectSource(key, 'web')}
-                      className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
+                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       {web[key] != null ? String(web[key]) : <span className="text-zinc-300">—</span>}
                     </button>
                     <button
                       key={`${key}-obs`}
                       onClick={() => selectSource(key, 'obsidian')}
-                      className={`px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 text-sm text-zinc-700 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
+                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       {obs[key] != null ? String(obs[key]) : <span className="text-zinc-300">—</span>}
                     </button>
                   </>
@@ -274,14 +283,16 @@ function ConflictCard({
                   <>
                     <button
                       onClick={() => selectSource('tags', 'web')}
-                      className={`px-3 py-2 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
+                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       <TagChips tags={web.tags ?? []} />
                     </button>
                     <button
                       onClick={() => selectSource('tags', 'obsidian')}
-                      className={`px-3 py-2 border-b border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 border-b border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
+                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       <TagChips tags={obs.tags ?? []} />
                     </button>
                   </>
@@ -316,7 +327,6 @@ function ConflictCard({
             const borderClass = isLast ? '' : 'border-b'
             const selected = fieldSources[key]
             const textVal = (combinedValues[key] as string | null) ?? ''
-            const rows = Math.max(2, Math.min(8, textVal.split('\n').length + 1))
             return (
               <>
                 <div key={`${key}-label`} className={`px-3 py-2 text-xs text-zinc-500 ${borderClass} border-r border-zinc-100 ${rowClass}`}>
@@ -327,8 +337,9 @@ function ConflictCard({
                     <button
                       key={`${key}-web`}
                       onClick={() => selectSource(key, 'web')}
-                      className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left ${rowClass} ${selected === 'web' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'web')}`}
                     >
+                      {selected === 'web' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       {web[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{web[key] as string}</pre>
                       ) : (
@@ -338,8 +349,9 @@ function ConflictCard({
                     <button
                       key={`${key}-obs`}
                       onClick={() => selectSource(key, 'obsidian')}
-                      className={`px-3 py-2 ${borderClass} border-r border-zinc-100 text-left ${rowClass} ${selected === 'obsidian' ? 'ring-2 ring-inset ring-amber-400' : ''}`}
+                      className={`relative px-3 py-2 ${borderClass} border-r border-zinc-100 text-left transition-colors ${selClass(kind, selected === 'obsidian')}`}
                     >
+                      {selected === 'obsidian' && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold text-blue-400 select-none leading-none">✓</span>}
                       {obs[key] ? (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap max-h-40 overflow-y-auto font-sans">{obs[key] as string}</pre>
                       ) : (
@@ -365,13 +377,12 @@ function ConflictCard({
                     </div>
                   </>
                 )}
-                <div key={`${key}-combined`} className={`px-2 py-1.5 ${borderClass} border-zinc-100 ${rowClass}`}>
+                <div key={`${key}-combined`} className={`flex flex-col px-2 py-1.5 ${borderClass} border-zinc-100 ${rowClass}`}>
                   <textarea
                     value={textVal}
-                    rows={rows}
                     onChange={e => editCombined(key, e.target.value || null)}
                     placeholder="—"
-                    className="w-full text-xs text-zinc-700 font-sans whitespace-pre-wrap resize-y bg-transparent outline-none focus:ring-1 focus:ring-inset focus:ring-blue-300 rounded px-1 py-0.5 placeholder:text-zinc-300"
+                    className="flex-1 min-h-0 w-full text-xs text-zinc-700 font-sans whitespace-pre-wrap resize-none bg-transparent outline-none focus:ring-1 focus:ring-inset focus:ring-blue-300 rounded px-1 py-0.5 placeholder:text-zinc-300"
                   />
                 </div>
               </>
