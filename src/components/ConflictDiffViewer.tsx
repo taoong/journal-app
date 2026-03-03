@@ -438,6 +438,9 @@ export default function ConflictDiffViewer({ initialConflicts }: Props) {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-zinc-500">
+        {conflicts.length} entr{conflicts.length === 1 ? 'y needs' : 'ies need'} review
+      </p>
       {conflicts.map(conflict => (
         <ConflictCard key={conflict.id} conflict={conflict} onResolved={handleResolved} />
       ))}

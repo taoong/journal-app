@@ -1,6 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase-server'
-import Link from 'next/link'
 import ConflictDiffViewer from '@/components/ConflictDiffViewer'
+import BackButton from '@/components/BackButton'
 import type { PendingImport } from '@/types/entry'
 import { GitMerge } from 'lucide-react'
 
@@ -28,19 +28,9 @@ export default async function ImportConflictsPage() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-zinc-900">Import Conflicts</h1>
-                {pendingConflicts.length > 0 && (
-                  <p className="text-sm text-zinc-500">
-                    {pendingConflicts.length} entr{pendingConflicts.length === 1 ? 'y needs' : 'ies need'} review
-                  </p>
-                )}
               </div>
             </div>
-            <Link
-              href="/settings"
-              className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-            >
-              ← Settings
-            </Link>
+            <BackButton />
           </div>
         </div>
 
