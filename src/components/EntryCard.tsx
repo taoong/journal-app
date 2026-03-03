@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, GitMerge } from 'lucide-react'
 
 interface EntryCardProps {
   entry: {
@@ -12,19 +12,28 @@ interface EntryCardProps {
     highlights_high?: string | null
   }
   tags: string[]
+  hasConflict?: boolean
 }
 
-const EntryCard = memo(function EntryCard({ entry, tags }: EntryCardProps) {
+const EntryCard = memo(function EntryCard({ entry, tags, hasConflict }: EntryCardProps) {
   return (
     <Link
-      href={`/entries/${entry.date}`}
-      className="block bg-white rounded-xl border border-zinc-200 px-4 py-3 hover:border-zinc-300 hover:shadow-sm transition-all group"
+      href={hasConflict ? '/import/conflicts' : `/entries/${entry.date}`}
+      className={`block bg-white rounded-xl border px-4 py-3 hover:shadow-sm transition-all group ${
+        hasConflict ? 'border-amber-300 hover:border-amber-400' : 'border-zinc-200 hover:border-zinc-300'
+      }`}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="font-medium text-zinc-900 group-hover:text-zinc-700 transition-colors">
             {format(new Date(entry.date), 'EEE, MMM d, yyyy')}
           </h3>
+          {hasConflict && (
+            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium flex items-center gap-1">
+              <GitMerge className="w-3 h-3" />
+              Conflict
+            </span>
+          )}
           {entry.p_score && (
             <span className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full">
               P: {entry.p_score}

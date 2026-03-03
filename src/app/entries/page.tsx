@@ -6,7 +6,7 @@ import LogoutButton from '@/components/LogoutButton'
 import EntryCard from '@/components/EntryCard'
 import MissingDayCard from '@/components/MissingDayCard'
 import EntriesContent from '@/components/EntriesContent'
-import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Plus, Calendar as CalendarIcon, List, Search, BarChart3, Settings, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, CheckCircle2, GitMerge } from 'lucide-react'
 import { escapeSearchQuery } from '@/lib/validation'
 import { PAGE_SIZE, DEFAULT_TIMEZONE } from '@/lib/constants'
 import { calculateIncompleteDays, countIncompleteDays, getDayStatus } from '@/lib/incomplete-days'
@@ -78,7 +78,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
   if (incomplete) entriesQuery = entriesQuery.eq('complete', false)
 
   // Run all queries in parallel for better performance
-  const [entriesResult, analyticsResult, calendarResult] = await Promise.all([
+  const [entriesResult, analyticsResult, calendarResult, conflictsResult] = await Promise.all([
     // Paginated entries query (only when NOT using incomplete filter, since we paginate differently)
     incomplete
       ? Promise.resolve({ data: null, count: null })
@@ -98,12 +98,21 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       .select('date, highlights_high, highlights_low, complete')
       .eq('user_id', user?.id)
       .gte('date', format(monthStart, 'yyyy-MM-dd'))
-      .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+      .lte('date', format(monthEnd, 'yyyy-MM-dd')),
+    // Pending import conflicts query
+    supabase
+      .from('pending_imports')
+      .select('date')
+      .eq('user_id', user?.id)
+      .eq('status', 'pending')
   ])
 
   const { data: entriesData, count } = entriesResult
   const { data: allEntries } = analyticsResult
   const { data: calendarEntries } = calendarResult
+  const { data: pendingConflicts } = conflictsResult
+  const conflictDates = new Set<string>((pendingConflicts ?? []).map(c => c.date as string))
+  const conflictCount = conflictDates.size
 
   // Build incomplete days list when incomplete filter is active
   let incompleteDaysList: IncompleteDayItem[] = []
@@ -192,6 +201,25 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="max-w-5xl mx-auto py-6 px-4">
+        {/* Conflict Banner */}
+        {currentPage === 1 && conflictCount > 0 && (
+          <Link
+            href="/import/conflicts"
+            className="flex items-center justify-between gap-3 mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm hover:bg-amber-100 transition-colors group"
+          >
+            <div className="flex items-center gap-2 text-amber-800">
+              <GitMerge className="w-4 h-4 flex-shrink-0" />
+              <span>
+                <span className="font-semibold">{conflictCount} import conflict{conflictCount !== 1 ? 's' : ''}</span>
+                {' '}need review
+              </span>
+            </div>
+            <span className="text-xs text-amber-600 group-hover:underline flex items-center gap-1">
+              Review now <ChevronRight className="w-3 h-3" />
+            </span>
+          </Link>
+        )}
+
         {/* Analytics Widget - Only on first page */}
         {currentPage === 1 && analytics && (
           <div className="grid grid-cols-2 gap-3 mb-6">
@@ -377,6 +405,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 const dateStr = format(day, 'yyyy-MM-dd')
                 const todayStr = format(today, 'yyyy-MM-dd')
                 const status = getDayStatus(dateStr, todayStr, entriesByDate[dateStr], firstEntryDate ?? dateStr)
+                const hasConflict = conflictDates.has(dateStr)
 
                 const bgClass =
                   status === 'complete'   ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200' :
@@ -387,12 +416,15 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 return (
                   <Link
                     key={dateStr}
-                    href={entriesByDate[dateStr] ? `/entries/${dateStr}` : `/entries/new?date=${dateStr}`}
-                    className={`h-10 flex items-center justify-center rounded-lg text-sm transition-colors ${bgClass} ${
+                    href={hasConflict ? '/import/conflicts' : (entriesByDate[dateStr] ? `/entries/${dateStr}` : `/entries/new?date=${dateStr}`)}
+                    className={`relative h-10 flex items-center justify-center rounded-lg text-sm transition-colors ${bgClass} ${
                       isSameDay(day, today) ? 'ring-2 ring-zinc-900 ring-offset-1 font-medium' : ''
                     }`}
                   >
                     {format(day, 'd')}
+                    {hasConflict && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-white" />
+                    )}
                   </Link>
                 )
               })}
@@ -415,6 +447,14 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 <div className="w-3 h-3 rounded bg-white border border-zinc-200" />
                 <span>Future</span>
               </div>
+              {conflictCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="relative w-3 h-3 rounded bg-white border border-zinc-200">
+                    <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-amber-500 border border-white" />
+                  </div>
+                  <span>Conflict</span>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -426,7 +466,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                 day.type === 'missing' ? (
                   <MissingDayCard key={day.date} date={day.date} />
                 ) : day.entry ? (
-                  <EntryCard key={day.date} entry={day.entry} tags={[]} />
+                  <EntryCard key={day.date} entry={day.entry} tags={[]} hasConflict={conflictDates.has(day.date)} />
                 ) : null
               )
             ) : (
@@ -437,7 +477,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
                   .filter((name): name is string => typeof name === 'string') || []
 
                 return (
-                  <EntryCard key={entry.id} entry={entry} tags={tags} />
+                  <EntryCard key={entry.id} entry={entry} tags={tags} hasConflict={conflictDates.has(entry.date)} />
                 )
               })
             )}
