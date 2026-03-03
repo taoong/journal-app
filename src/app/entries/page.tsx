@@ -211,7 +211,7 @@ export default async function EntriesPage({ searchParams }: { searchParams: Prom
               <GitMerge className="w-4 h-4 flex-shrink-0" />
               <span>
                 <span className="font-semibold">{conflictCount} import conflict{conflictCount !== 1 ? 's' : ''}</span>
-                {' '}need review
+                {' '}{conflictCount !== 1 ? 'need' : 'needs'} review
               </span>
             </div>
             <span className="text-xs text-amber-600 group-hover:underline flex items-center gap-1">
