@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import {
   LineChart, Line, BarChart, Bar, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  ReferenceArea,
 } from 'recharts'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, isWeekend } from 'date-fns'
 import { setNavigationTarget } from '@/contexts/LoadingContext'
 
 type TimeRange = '7d' | '30d' | '90d' | '1y' | 'all'
@@ -53,9 +54,38 @@ function formatFullDate(dateStr: string): string {
   }
 }
 
-function xAxisInterval(range: TimeRange): number | 'preserveStartEnd' {
-  if (range === 'all' || range === '1y') return 'preserveStartEnd'
-  return 0
+function xAxisInterval(range: TimeRange, dataLength: number): number {
+  if (range === '7d') return 0
+  if (range === '30d') return Math.max(1, Math.floor(dataLength / 10) - 1)
+  if (range === '90d') return Math.max(1, Math.floor(dataLength / 10) - 1)
+  // 1y and all: aim for ~10-12 labels
+  return Math.max(1, Math.floor(dataLength / 12) - 1)
+}
+
+function computeWeekendBands(entries: { date: string }[]): { start: string; end: string }[] {
+  const bands: { start: string; end: string }[] = []
+  let bandStart: string | null = null
+
+  for (const entry of entries) {
+    try {
+      const d = parseISO(entry.date)
+      if (isWeekend(d)) {
+        if (!bandStart) bandStart = entry.date
+      } else {
+        if (bandStart) {
+          bands.push({ start: bandStart, end: entries[entries.indexOf(entry) - 1]?.date ?? bandStart })
+          bandStart = null
+        }
+      }
+    } catch {
+      // skip invalid dates
+    }
+  }
+  // Close any trailing weekend band
+  if (bandStart) {
+    bands.push({ start: bandStart, end: entries[entries.length - 1]?.date ?? bandStart })
+  }
+  return bands
 }
 
 function computeMovingAverage(
@@ -233,7 +263,8 @@ export default function VisualizationsContent({ entries, range, tagFrequency, pr
   const [scatterY, setScatterY] = useState<MetricKey>('sleep_hours')
 
   const tickFormatter = (dateStr: string) => formatXAxisDate(dateStr, range)
-  const interval = xAxisInterval(range)
+  const interval = xAxisInterval(range, entries.length)
+  const weekendBands = computeWeekendBands(entries)
 
   // Enriched data with moving averages
   const pMa = computeMovingAverage(entries, 'p_score')
@@ -328,9 +359,12 @@ export default function VisualizationsContent({ entries, range, tagFrequency, pr
         hasData={plEntries.length > 0}
       >
         <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
+          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: range !== '7d' ? 16 : 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} />
+            {weekendBands.map((band, i) => (
+              <ReferenceArea key={i} x1={band.start} x2={band.end} fill="#f4f4f5" fillOpacity={0.8} ifOverflow="hidden" />
+            ))}
+            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} angle={range !== '7d' ? -35 : 0} textAnchor={range !== '7d' ? 'end' : 'middle'} />
             <YAxis domain={[1, 10]} tick={{ fontSize: 11, fill: '#71717a' }} />
             <Tooltip content={tooltipContent} />
             <Legend formatter={(value: string) => METRIC_LABELS[value] ?? value} />
@@ -349,9 +383,12 @@ export default function VisualizationsContent({ entries, range, tagFrequency, pr
         hasData={weightEntries.length > 0}
       >
         <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
+          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: range !== '7d' ? 16 : 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} />
+            {weekendBands.map((band, i) => (
+              <ReferenceArea key={i} x1={band.start} x2={band.end} fill="#f4f4f5" fillOpacity={0.8} ifOverflow="hidden" />
+            ))}
+            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} angle={range !== '7d' ? -35 : 0} textAnchor={range !== '7d' ? 'end' : 'middle'} />
             <YAxis tick={{ fontSize: 11, fill: '#71717a' }} />
             <Tooltip content={tooltipContent} />
             <Line type="monotone" dataKey="weight" stroke="#8b5cf6" strokeWidth={2} dot={false} connectNulls activeDot={{ r: 5 }} />
@@ -367,9 +404,12 @@ export default function VisualizationsContent({ entries, range, tagFrequency, pr
         hasData={sleepEntries.length > 0}
       >
         <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
+          <LineChart data={enrichedData} margin={{ top: 4, right: 8, bottom: range !== '7d' ? 16 : 0, left: -16 }} onClick={handleLineChartClick} style={{ cursor: 'pointer' }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} />
+            {weekendBands.map((band, i) => (
+              <ReferenceArea key={i} x1={band.start} x2={band.end} fill="#f4f4f5" fillOpacity={0.8} ifOverflow="hidden" />
+            ))}
+            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} angle={range !== '7d' ? -35 : 0} textAnchor={range !== '7d' ? 'end' : 'middle'} />
             <YAxis domain={[0, 12]} tick={{ fontSize: 11, fill: '#71717a' }} />
             <Tooltip content={tooltipContent} />
             <Line type="monotone" dataKey="sleep_hours" stroke="#f59e0b" strokeWidth={2} dot={false} connectNulls activeDot={{ r: 5 }} />
@@ -385,9 +425,12 @@ export default function VisualizationsContent({ entries, range, tagFrequency, pr
         hasData={caloriesEntries.length > 0}
       >
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={entries} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+          <BarChart data={entries} margin={{ top: 4, right: 8, bottom: range !== '7d' ? 16 : 0, left: -16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} />
+            {weekendBands.map((band, i) => (
+              <ReferenceArea key={i} x1={band.start} x2={band.end} fill="#f4f4f5" fillOpacity={0.8} ifOverflow="hidden" />
+            ))}
+            <XAxis dataKey="date" tickFormatter={tickFormatter} interval={interval} tick={{ fontSize: 11, fill: '#71717a' }} angle={range !== '7d' ? -35 : 0} textAnchor={range !== '7d' ? 'end' : 'middle'} />
             <YAxis tick={{ fontSize: 11, fill: '#71717a' }} />
             <Tooltip content={tooltipContent} />
             <Bar
