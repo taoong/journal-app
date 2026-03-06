@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase-server'
+import { revalidatePath } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import type { ImportEntryData } from '@/types/entry'
@@ -166,6 +167,9 @@ export async function POST(req: NextRequest) {
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
+  revalidatePath('/entries')
+  revalidatePath('/settings')
 
   return NextResponse.json({ success: true })
 }
